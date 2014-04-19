@@ -152,6 +152,7 @@ deactivateAPI
 
 apiSpec
   {
+    username: String,
     namespace: String,
     version: Number, 
     name: String,

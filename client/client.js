@@ -6,7 +6,16 @@ cloasis.loginUser('evan', 'arst', function(err, session){
   if (err)
     throw err;
 
-  var apiId = { namespace: "evan.test", name: "isPrime", version: 0.1 };
+  var apiId = { 
+    username: 'evan', 
+    namespace: "evan.test", 
+    name: "isPrime", 
+    version: 0.1,
+    description: "Tests for a prime number",
+    examples: [ { "some": "json" } ],
+    inputSpec: { "more": "json" },
+    outputSpec: { "much": "more" }
+  };
 
   session.register(apiId, function(err){
     session.activate({ fn: isPrime, apiIdentifier: apiId }, function(err){
