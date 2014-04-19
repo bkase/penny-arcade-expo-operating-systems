@@ -9,23 +9,45 @@
     Utils.makeEventable(this);
     this.socket = socket;
 
-    this.socket.on('open', function() {
-      this.emit('open');
-    }.bind(this));
-    this.socket.on('message', function(buf){
-      var bytes = Utils.arrayify(buf);
-      this.emit('msg', bytes);
-    }.bind(this));
+    if ('on' in this.socket){
+      this.socket.on('open', function() {
+        this.emit('open');
+      }.bind(this));
+      this.socket.on('message', function(buf){
+        var bytes = Utils.arrayify(buf);
+        this.emit('msg', bytes);
+      }.bind(this));
 
-    this.socket.on('close', function(){
-      this.emit('close');
-    }.bind(this));
+      this.socket.on('close', function(){
+        this.emit('close');
+      }.bind(this));
+    }
+    else {
+      this.socket.binaryType = 'arraybuffer';
+      this.socket.onopen = function() {
+        this.emit('open');
+      }.bind(this);
+      this.socket.onmessage = function(buf){
+        var bytes = Utils.arrayify(new Uint8Array(buf.data));
+        this.emit('msg', bytes);
+      }.bind(this);
+
+      this.socket.onclose = function(){
+        this.emit('close');
+      }.bind(this);
+    }
   }
 
   Connection.prototype = {
     constructor: Connection,
     send: function(bytes){
-      this.socket.send(bytes, {binary: true, mask: false});
+      if ('on' in this.socket)
+        this.socket.send(bytes, {binary: true, mask: false});
+      else {
+        var array = new Uint8Array(bytes);
+        this.socket.send(array.buffer);
+      }
+
     }
   };
 

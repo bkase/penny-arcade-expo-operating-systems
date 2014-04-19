@@ -7,6 +7,7 @@
     var Utils = require('../common/utils').Utils;
   } else {
     Connection = exports.Connection;
+    WebSocket = exports.WebSocket;
     Utils = exports.Utils;
     RPC = exports.RPC;
   }

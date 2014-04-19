@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+
+<script src="common/utils.js"></script>
+<script src="common/connection.js"></script>
+<script src="common/rpc.js"></script>
+<script src="client/cloasis.js"></script>
+<script>
+
+Cloasis.registerUser('evan', 'arst', function(err, session){
+  //if (err)
+  //  throw err;
+
+  var apiId = { namespace: "evan.test", name: "isPrime", version: 0.1 };
+
+  session.call(apiId, { n: 7 }, function(err, output){
+    if (err)
+      throw err;
+    console.log(output);
+  });
+});
+
+</script>

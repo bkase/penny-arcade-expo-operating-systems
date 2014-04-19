@@ -58,6 +58,7 @@ function loginUser(rpc, data, done){
 }
 
 function search(rpc, data, done){
+  //TODO check user logged in
   db.searchAPIs(data.query, function(err, apis){
     if (err)
       done({ err: err });
@@ -67,6 +68,7 @@ function search(rpc, data, done){
 }
 
 function info(rpc, data, done){
+  //TODO check user logged in
   db.infoAPIs(data.apiIdentifiers, function(err, apis){
     if (err)
       done({ err: err });
@@ -76,6 +78,7 @@ function info(rpc, data, done){
 }
 
 function register(rpc, data, done){
+  //TODO ensure namespace has username + user logged in
   db.registerAPIs(data.apiSpecs, function(err){
     if (err)
       done({ err: err });
@@ -85,6 +88,7 @@ function register(rpc, data, done){
 }
 
 function call(rpc, data, done){
+  //TODO check user logged in
   var apiStr = Utils.stringifyAPIIdentifier(data.apiIdentifier);
   if (!(apiStr in fnTable)){
     done({ err: 'api not active' });
@@ -99,6 +103,7 @@ function call(rpc, data, done){
 }
 
 function activate(rpc, data, done){
+  //TODO check user logged in + api registered + owned by user
   var err = { errs: [] };
   var wasErr = false;
   data.apiIdentifiers.forEach(function(apiIdentifier){
@@ -123,6 +128,7 @@ function activate(rpc, data, done){
 }
 
 function deactivate(rpc, data, done){
+  //TODO check user logged in + api owned by user
   delete fnTable[Utils.stringifyAPIIdentifier(apiIdentifier)];
   if (rpc.conn.id in activeAPIsByConnId){
     delete activeAPIsByConnId[rpc.conn.id][apiStr];
