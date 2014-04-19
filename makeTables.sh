@@ -3,7 +3,7 @@
 CMD="psql -d cloasis -c"
 
 $CMD 'CREATE TABLE apispecs (
-  userId         int,
+  username       varchar(256),
   namespace      varchar(1024),
   version        real,
   name           varchar(256),
@@ -23,7 +23,7 @@ $CMD 'CREATE TABLE specTypes (
   json   text
 );'
 
-$CMD 'CREATE TABLE names (
-  id        int,
-  username  varchar(256)
+$CMD 'CREATE TABLE users (
+  username  varchar(256),
+  passhash  char(64)
 );'
