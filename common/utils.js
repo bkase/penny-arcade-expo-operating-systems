@@ -64,7 +64,21 @@
       whoami.on('close', function(){
         done(whoiam.replace('\n', ''));
       });
-    }
+    },
+    waterfall: function(fns, done, args){
+      args = args || [];
+      if (fns.length === 0){
+        done.apply(null, [null].concat(args));
+      }
+      else {
+        fns.shift().apply(null, args.concat([function(err){
+          if (err)
+            done(err);
+          else 
+            Utils.waterfall(fns, done, Array.prototype.slice.call(arguments, 1));
+        }]));
+      }
+    },
   }
 
   exports.Utils = Utils;
