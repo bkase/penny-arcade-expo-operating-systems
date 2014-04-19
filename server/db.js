@@ -19,7 +19,6 @@ DB.prototype = {
   },
 
   createUser: function(username, password, done){
-    // TODO: MAKE SURE USER EXISTS
     pg.connect(this.conString, function(err, client, freeClient) {
       if (err) {
         done(err);
@@ -107,7 +106,30 @@ DB.prototype = {
   }.bind(this),
 
   validateUser: function(username, password, done){
+    pg.connect(this.conString, function(err, client, freeClient) {
+      if (err) {
+        done(err);
+        return;
+      }
 
+      var users = schema.users;
+      var query = users.select(users.passhash).from(users).where(users.username.equals(username)).toQuery();
+      client.query(query.text, query.values, function(err, result){
+        freeClient();
+        if (err) {
+          done(err);
+        }
+        else if (result.rows.length != 1){
+          done(null, false);
+        }
+        else if (result.rows[0].passhash !== this._passwordToHash(username, password)){
+          done(null, false);
+        }
+        else {
+          done(null, true);
+        }
+      }.bind(this)); 
+    }.bind(this));
   },
 
   registerAPIs: function(apiSpecs, done){

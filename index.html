@@ -6,9 +6,9 @@
 <script src="client/cloasis.js"></script>
 <script>
 
-Cloasis.registerUser('evan', 'arst', function(err, session){
-  //if (err)
-  //  throw err;
+Cloasis.loginUser('evan', 'arst', function(err, session){
+  if (err)
+    throw err;
 
   var apiId = { namespace: "evan.test", name: "isPrime", version: 0.1 };
 

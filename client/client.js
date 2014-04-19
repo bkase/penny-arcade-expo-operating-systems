@@ -2,9 +2,9 @@ var cloasis = require('./cloasis').Cloasis;
 
 var WebSocketServer = require('ws').Client;
 
-cloasis.registerUser('evan', 'arst', function(err, session){
-  //if (err)
-  //  throw err;
+cloasis.loginUser('evan', 'arst', function(err, session){
+  if (err)
+    throw err;
 
   var apiId = { namespace: "evan.test", name: "isPrime", version: 0.1 };
 
