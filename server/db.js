@@ -14,7 +14,7 @@ DB.prototype = {
   freeAndDone: function(free, done) {
     return function() {
       free();
-      done();
+      done.apply(done, arguments);
     };
   },
 
@@ -27,23 +27,17 @@ DB.prototype = {
       }
 
       this.transaction(client, this.freeAndDone(freeClient, done), function(revert, finish) {
-        console.log("in this.trnasatction");
         return function() {
           Utils.waterfall([
             function(next) {
-              console.log("in first waterfall", next);
               var users = schema.users;
               var query = users.select(users.star()).from(users).where(users.username.equals(username)).toQuery();
-              console.log("doing query", query);
               client.query(query.text, query.values, next); 
             },
 
             function(result, next) {
-              console.log("in second waterfall");
               if (result.rows.length > 0) {
-                revert(function() {
-                  next(null, true);
-                });
+                next(null, true);
               } else {
                 next(null, false);
               }
@@ -66,11 +60,15 @@ DB.prototype = {
 
           ], function done(err, isExist) {
             if (err) {
-              console.log(err);
-              revert(finish);
+              revert(finish, err);
               return;
             } else {
-              finish(null, isExist);
+              if (isExist) {
+                revert(finish, null, true);
+                return;
+              } else {
+                finish(null, false);
+              }
             }
           });
         }.bind(this);
@@ -80,24 +78,30 @@ DB.prototype = {
 
   transaction: function(client, done, andThen) {
     client.query('BEGIN', function(err) {
-      console.log("begin transaction");
       var revert = this.rollback(client)
       if (err) return revert(done);
       process.nextTick(andThen(revert, function andThenFinished() {
-        console.log("end transaction");
         var args = Utils.arrayify(arguments);
         args.unshift(null);
-        console.log("committing transaction");
         client.query('COMMIT', done.bind.apply(done, args));
       }));
     }.bind(this));
   },
 
   rollback: function(client) {
-    return function(done) {
-      client.query('ROLLBACK', function(err) {
-        console.log("Rolling back", err);
-        return done(err);
+    return function(done, err) {
+      var args = Utils.arrayify(arguments);
+      args.shift();
+      args.shift();
+      client.query('ROLLBACK', function(rollErr) {
+        if (err) {
+          args.unshift(err);
+        } else if (rollErr) {
+          args.unshift(rollErr);
+        } else {
+          args.unshift(null);
+        }
+        return done.apply(done, args);
       });
     }.bind(this);
   }.bind(this),
