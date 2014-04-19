@@ -4,6 +4,10 @@
 
 ## The Spec
   
+NOTE THIS IS OLD DO NOT LISTEN
+  name is type
+  input is data
+
 
 * socket based (websockets / tcp)
 * send JSON message prefixed with length
@@ -90,7 +94,7 @@ callAPI
   this takes the unique identifier of an API and its input, and returns the output
   {
     type: "call",
-    apiIndentifiers: [ namespace, name, version ],
+    apiIndentifier: [ namespace, name, version ],
     input: {
       ...
     }
