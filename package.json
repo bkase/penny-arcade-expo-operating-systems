@@ -4,6 +4,7 @@
   "description": "# The Plan",
   "main": "index.js",
   "dependencies": {
+    "sql": "^0.38.0",
     "ws": "~0.4.31"
   },
   "devDependencies": {},
