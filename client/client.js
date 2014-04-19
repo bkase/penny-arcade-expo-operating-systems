@@ -7,7 +7,7 @@ cloasis.registerUser('evan', 'arst', function(err, session){
     throw err;
   console.log("#");
 
-  session.register({ }, function(err){
+  session.activate({ }, function(err){
     if (err)
       throw err;
     console.log(output);

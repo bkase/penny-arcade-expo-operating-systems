@@ -2,10 +2,9 @@ var crypto = require('crypto');
 var sql = require('sql');
 var schema = require('./schema');
 var pg = require('pg');
-var conString = "postgres://bkase@localhost/cloasis";
 
-function DB(){
-
+function DB(conString){
+  this.conString = conString;
 }
 
 DB.prototype = {
@@ -13,14 +12,13 @@ DB.prototype = {
 
   createUser: function(username, password, done){
     // TODO: MAKE SURE USER EXISTS
-    pg.connect(conString, function(err, client, freeClient) {
+    pg.connect(this.conString, function(err, client, freeClient) {
       if (err) {
         done(err);
         return;
       }
 
       var query = schema.users.insert({'username':username, 'passhash':this._passwordToHash(username, password)}).toQuery();
-      console.log(query.text, query.values);
       client.query(query.text, query.values, function(err, result) {
         freeClient();
 

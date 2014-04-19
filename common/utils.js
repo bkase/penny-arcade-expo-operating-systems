@@ -54,6 +54,17 @@
     multiline: function(fn) {
       return fn.toString().replace(/^[^\/]+\/\*!?/, '').replace(/\*\/[^\/]+$/, '');
     },
+    whoami: function(done){
+      var spawn = require('child_process').spawn;
+      var whoami = spawn('whoami');
+      var whoiam = '';
+      whoami.stdout.on('data', function(data){
+        whoiam += data.toString();
+      });
+      whoami.on('close', function(){
+        done(whoiam.replace('\n', ''));
+      });
+    }
   }
 
   exports.Utils = Utils;

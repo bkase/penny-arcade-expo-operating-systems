@@ -5,20 +5,26 @@ var wss = new WebSocketServer({port: 14222});
 var Connection = require('../common/connection').Connection;
 var RPC = require('../common/rpc').RPC;
 var DB = require('./db').DB;
+var Utils = require('../common/utils').Utils;
 
-var db = new DB();
+var db = null;
 
-wss.on('connection', function(ws) {
-  var conn = new Connection(ws);
-  var rpc = new RPC(conn, true);
-  rpc.on('registerUser', registerUser);
-  rpc.on('loginUser', loginUser);
-  rpc.on('search', search);
-  rpc.on('call', call);
-  rpc.on('register', register);
-  rpc.on('info', info);
-  rpc.on('activate', activate);
-  rpc.on('deactivate', deactivate);
+Utils.whoami(function(whoiam){
+  var conString = 'postgres://' + whoiam + '@localhost/cloasis';
+  db = new DB(conString);
+
+  wss.on('connection', function(ws) {
+    var conn = new Connection(ws);
+    var rpc = new RPC(conn, true);
+    rpc.on('registerUser', registerUser);
+    rpc.on('loginUser', loginUser);
+    rpc.on('search', search);
+    rpc.on('call', call);
+    rpc.on('register', register);
+    rpc.on('info', info);
+    rpc.on('activate', activate);
+    rpc.on('deactivate', deactivate);
+  });
 });
 
 var fnTable = {};
@@ -26,6 +32,7 @@ var fnTable = {};
 //PAXOS will go in the middle of these functions later
 function registerUser(conn, data, done){
   db.createUser(data.username, data.password, function(err, exists){
+    console.log(err);
     if (err)
       done({ err: err });
     else if (exists)
