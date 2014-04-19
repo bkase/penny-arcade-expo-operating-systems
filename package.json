@@ -1,0 +1,23 @@
+{
+  "name": "penny-arcade-expo-operating-systems",
+  "version": "0.0.0",
+  "description": "# The Plan",
+  "main": "index.js",
+  "dependencies": {
+    "ws": "~0.4.31"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/bkase/penny-arcade-expo-operating-systems.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bkase/penny-arcade-expo-operating-systems/issues"
+  },
+  "homepage": "https://github.com/bkase/penny-arcade-expo-operating-systems"
+}
