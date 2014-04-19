@@ -53,16 +53,16 @@
       this.rpc.call('loginUser', {
         username: username,
         password: password
-      }, function(err, success){
-        done(err || success);
+      }, function(err, result){
+        done(err || result.err);
       });
     },
     registerUser: function(username, password, done){
       this.rpc.call('registerUser', {
         username: username,
         password: password
-      }, function(err, success){
-        done(err || success);
+      }, function(err, result){
+        done(err || result.err);
       });
     },
     call: function(apiIdentifier, input, done){
@@ -70,14 +70,14 @@
         apiIdentifier: apiIdentifier,
         input: input
       }, function(err, result){
-        done(result.err, result.output);
+        done(err || result.err, result.output);
       });
     },
     search: function(query, done){
       this.rpc.call('search', {
         query: query,
       }, function(err, result){
-        done(result.err, result.apis);
+        done(err || result.err, result.apis);
       });
     },
     register: function(){
@@ -87,7 +87,7 @@
       this.rpc.call('register', {
         apiSpecs: apiSpecs,
       }, function(err, result){
-        done(result.err);
+        done(err || result.err);
       });
     },
     info: function(){
@@ -97,7 +97,7 @@
       this.rpc.call('info', {
         apiIdentifiers: apiIds,
       }, function(err, result){
-        done(result.err, result.apis);
+        done(err || result.err, result.apis);
       });
     },
     activate: function(){
@@ -107,7 +107,7 @@
       this.rpc.call('activate', {
         apiIdentifiers: apiIds,
       }, function(err, result){
-        done(result.err);
+        done(err || result.err);
       });
     },
     deactivate: function(){
@@ -117,7 +117,7 @@
       this.rpc.call('deactivate', {
         apiIdentifiers: apiIds,
       }, function(err, result){
-        done(result.err);
+        done(err || result.err);
       });
     }
   }
