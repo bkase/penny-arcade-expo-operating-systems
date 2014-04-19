@@ -58,7 +58,6 @@
       });
     },
     registerUser: function(username, password, done){
-      console.log("!");
       this.rpc.call('registerUser', {
         username: username,
         password: password
