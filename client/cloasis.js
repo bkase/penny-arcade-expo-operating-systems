@@ -58,6 +58,7 @@
       });
     },
     registerUser: function(username, password, done){
+      console.log("!");
       this.rpc.call('registerUser', {
         username: username,
         password: password
@@ -66,34 +67,59 @@
       });
     },
     call: function(apiIdentifier, input, done){
-      done(null, { '3': 'sure it worked' });
+      this.rpc.call('call', {
+        apiIdentifier: apiIdentifier,
+        input: input
+      }, function(err, result){
+        done(result.err, result.output);
+      });
     },
     search: function(query, done){
-      done(null, [ '3', '3' ]);
+      this.rpc.call('search', {
+        query: query,
+      }, function(err, result){
+        done(result.err, result.apis);
+      });
     },
     register: function(){
       var apiSpecs = Array.prototype.slice.call(arguments, 0);
       var done = apiSpecs.pop();
 
-      done(null);
+      this.rpc.call('register', {
+        apiSpecs: apiSpecs,
+      }, function(err, result){
+        done(result.err);
+      });
     },
     info: function(){
       var apiIds = Array.prototype.slice.call(arguments, 0);
       var done = apiSpecs.pop();
 
-      done(null, [ { 'namespace': 0 } ]);
+      this.rpc.call('info', {
+        apiIdentifiers: apiIds,
+      }, function(err, result){
+        done(result.err, result.apis);
+      });
     },
     activate: function(){
       var apiIds = Array.prototype.slice.call(arguments, 0);
       var done = apiSpecs.pop();
 
-      done(null);
+      this.rpc.call('activate', {
+        apiIdentifiers: apiIds,
+      }, function(err, result){
+        done(result.err);
+      });
     },
     deactivate: function(){
       var apiIds = Array.prototype.slice.call(arguments, 0);
       var done = apiSpecs.pop();
 
-      done(null);
+      this.rpc.call('deactivate', {
+        apiIdentifiers: apiIds,
+      }, function(err, result){
+        done(result.err);
+      });
     }
   }
 
