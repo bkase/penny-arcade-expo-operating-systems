@@ -16,7 +16,7 @@
   //======================
 
   var Cloasis = {
-    login: function(username, password, done){
+    loginUser: function(username, password, done){
       var conn = new Connection(new WebSocket('ws://localhost:14222'));
       conn.on('open', function() {
         var session = new Session(conn);
@@ -26,7 +26,7 @@
       });
     },
 
-    register: function(username, password, done){
+    registerUser: function(username, password, done){
       var conn = new Connection(new WebSocket('ws://localhost:14222'));
       conn.on('open', function() {
         var session = new Session(conn);

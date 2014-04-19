@@ -10,7 +10,7 @@ var db = new DB();
 
 wss.on('connection', function(ws) {
   var conn = new Connection(ws);
-  var rpc = new RPC(conn);
+  var rpc = new RPC(conn, true);
   rpc.on('registerUser', registerUser);
   rpc.on('loginUser', loginUser);
   rpc.on('search', search);
@@ -21,8 +21,10 @@ wss.on('connection', function(ws) {
   rpc.on('deactivate', deactivate);
 });
 
+var fnTable = {};
+
 //PAXOS will go in the middle of these functions later
-function registerUser(data, done){
+function registerUser(conn, data, done){
   db.createUser(data.username, data.password, function(err, exists){
     if (err)
       done({ err: err });
@@ -33,7 +35,7 @@ function registerUser(data, done){
   });
 }
 
-function loginUser(data, done){
+function loginUser(conn, data, done){
   db.validateUser(data.username, data.password, function(err, valid){
     if (err)
       done({ err: err });
@@ -44,7 +46,7 @@ function loginUser(data, done){
   });
 }
 
-function search(data, done){
+function search(conn, data, done){
   db.searchAPIs(data.query, function(err, apis){
     if (err)
       done({ err: err });
@@ -53,7 +55,7 @@ function search(data, done){
   });
 }
 
-function info(data, done){
+function info(conn, data, done){
   db.infoAPIs(data.apiIdentifiers, function(err, apis){
     if (err)
       done({ err: err });
@@ -62,7 +64,7 @@ function info(data, done){
   });
 }
 
-function register(data, done){
+function register(conn, data, done){
   db.registerAPIs(data.apiSpecs, function(err){
     if (err)
       done({ err: err });
@@ -71,15 +73,20 @@ function register(data, done){
   });
 }
 
-function call(data, done){
+function call(conn, data, done){
 
 }
 
-function activate(data, done){
-
+function activate(conn, data, done){
+  data.apiIdentifiers.forEach(function(apiIdentifier){
+    fnTables[stringifyAPIIdentifier(apiIdentifier)] = conn;
+  });
 }
 
-function deactivate(data, done){
-
+function deactivate(conn, data, done){
+  delete fnTables[stringifyAPIIdentifier(apiIdentifier)];
 }
 
+function stringifyAPIIdentifier(apiIdentifier){
+  return apiIdentifier.namespace + '.' + apiIdentifier.name + '.' + apiIdentifier.version;
+}

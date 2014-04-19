@@ -6,8 +6,9 @@
     Utils = exports.Utils;
   }
 
-  function RPC(conn){
+  function RPC(conn, prependConn){
     this.conn = conn;
+    this.prependConn = !!prependConn;
     Utils.makeEventable(this);
     this.nextRequestId = 0;
     this.fnTable = [];
@@ -36,12 +37,19 @@
           throw new Error('cb not in table!');
         }
       } else {
-        this.emit(json.name, json.input, function(output){
-          this.conn.send(Utils.jsonToBytes({
-            resultId: json.requestId,
-            input: output
-          }));
-        }.bind(this));
+        var args =[
+          json.name, 
+          json.input, 
+          function(output){
+            this.conn.send(Utils.jsonToBytes({
+              resultId: json.requestId,
+              input: output
+            }));
+          }.bind(this)
+        ];
+        if (this.prependConn)
+          args.splice(1,0,this.conn);
+        this.emit.apply(this, args);
       }
     }
   }
