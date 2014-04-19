@@ -26,6 +26,12 @@
           console.log('dropped', event);
         }
       }.bind(module);
+      module.ison = function(event){
+        return module['on' + event] != null;
+      }.bind(module);
+      module.off = function(event){
+        delete module['on' + event];
+      }.bind(module);
     },
     bytesToString: function(bytes){
       return bytes.map(function(c){ return String.fromCharCode(c); }).join('')
@@ -79,6 +85,9 @@
         }]));
       }
     },
+    stringifyAPIIdentifier: function(apiIdentifier){
+      return apiIdentifier.namespace + '.' + apiIdentifier.name + '.' + apiIdentifier.version;
+    }
   }
 
   exports.Utils = Utils;

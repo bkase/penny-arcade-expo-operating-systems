@@ -43,7 +43,9 @@
 
   function Session(conn){
     this.conn = conn;
+    this.fnTable = {};
     this.rpc = new RPC(this.conn);
+    this.rpc.on('call', this.parseCall.bind(this));
   }
 
   Session.prototype = {
@@ -101,8 +103,15 @@
       });
     },
     activate: function(){
-      var apiIds = Array.prototype.slice.call(arguments, 0);
-      var done = apiSpecs.pop();
+      var apis = Array.prototype.slice.call(arguments, 0);
+      var done = apis.pop();
+
+      var apiIds = [];
+      apis.forEach(function(api){
+        var apiStr = Utils.stringifyAPIIdentifier(api.apiIdentifier);
+        this.fnTable[apiStr] = api.fn;
+        apiIds.push(api.apiIdentifier);
+      }.bind(this));
 
       this.rpc.call('activate', {
         apiIdentifiers: apiIds,
@@ -110,9 +119,23 @@
         done(err || result.err);
       });
     },
+    parseCall: function(data, done){
+      var apiStr = Utils.stringifyAPIIdentifier(data.apiIdentifier);
+      if (apiStr in this.fnTable){
+        this.fnTable[apiStr](data.input, function(output){
+          done({ err: null, output: output });
+        });
+      }
+      else {
+        done({ err: 'api not found' });
+      }
+    },
     deactivate: function(){
       var apiIds = Array.prototype.slice.call(arguments, 0);
       var done = apiSpecs.pop();
+      apiIds.forEach(function(api){
+        delete this.fnTable[Utils.stringifyAPIIdentifier(api.apiIdentifier)];
+      }.bind(this));
 
       this.rpc.call('deactivate', {
         apiIdentifiers: apiIds,

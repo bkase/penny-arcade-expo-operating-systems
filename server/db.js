@@ -37,7 +37,7 @@ DB.prototype = {
   },
 
   registerAPIs: function(apiSpecs, done){
-
+    done(null);
   },
 
   searchAPIs: function(query, done){

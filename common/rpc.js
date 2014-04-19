@@ -13,6 +13,9 @@
     this.nextRequestId = 0;
     this.fnTable = [];
     this.conn.on('msg', this.parseMsg.bind(this));
+    this.conn.on('close', function(){
+      this.emit('close', this);
+    }.bind(this));
   }
 
   RPC.prototype = {
@@ -48,7 +51,7 @@
           }.bind(this)
         ];
         if (this.prependConn)
-          args.splice(1,0,this.conn);
+          args.splice(1,0,this);
         this.emit.apply(this, args);
       }
     }
