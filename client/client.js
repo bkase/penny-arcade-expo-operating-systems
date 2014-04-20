@@ -16,28 +16,34 @@ function onLogin(err, session) {
 
   var apiSpec = { 
     username: 'evan', 
-    namespace: "evan.test", 
-    name: "isPrime", 
+    namespace: "evan.test.notprime", 
+    name: "isNotPrime", 
     version: 0.1,
-    description: "Tests for a prime number",
+    description: "Tests for not a prime number",
     examples: [ { "some": "json" } ],
-    inputSpec: { "more": "json" },
-    outputSpec: { "much": "more" }
+    inputSpec: { "a": "json" },
+    outputSpec: { "b": "json" }
   };
 
-  var apiId = {
+  var apiId1 = {
+    name: "isNotPrime", 
+    namespace: "evan.test.notprime", 
+    version: 0.1
+  };
+
+  var apiId2 = {
     name: "isPrime", 
-    namespace: "evan.test", 
+    namespace: "evan.test",
     version: 0.1
   };
 
   session.register(apiSpec, function(err){
-    session.activate({ fn: isPrime, apiIdentifier: apiId }, function(err){
+    session.activate({ fn: isPrime, apiIdentifier: apiId1 }, function(err){
       if (err)
         throw err;
-      session.info(apiId, function(err, output){
+      session.info(apiId1, apiId2, function(err, output){
         console.log(output);
-        session.call(apiId, { n: 7 }, function(err, output){
+        session.call(apiId1, { n: 7 }, function(err, output){
           if (err)
             throw err;
           console.log(output);

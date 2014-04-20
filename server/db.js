@@ -235,9 +235,10 @@ DB.prototype = {
       var specs = schema.apispecs;
       var spectypes = schema.spectypes;
       //var query = specs.select(specs.star()).from(specs).from(spectypes).where(specs.inputspectype.equals(spectypes.id)).or(specs.outputspectype.equals(spectypes.id));
-      var queryText = "SELECT * FROM apispecs, spectypes WHERE (apispecs.inputspectype = spectypes.id OR apispecs.outputspectype = spectypes.id) AND (apispecs.namespace = $1)";
-      console.log(queryText, [ apiIds[0].namespace ]);
-      client.query(queryText, [ apiIds[0].namespace ], function(err, results) {
+      var queryText = "SELECT * FROM apispecs, spectypes WHERE (apispecs.inputspectype = spectypes.id OR apispecs.outputspectype = spectypes.id) AND " + this.constraintsForApiIds(apiIds);
+      // map + flatten
+      var queryValues = apiIds.map(function(id) { return [ id.namespace, id.name, id.version ]; }).reduce(function(a, b) { return a.concat(b); });
+      client.query(queryText, queryValues, function(err, results) {
         freeClient();
 
         if (err) {
@@ -245,19 +246,33 @@ DB.prototype = {
         } else if (results.rows.length < 2) {
           return done({ err: "Couldn't find info for this apiId" });
         } else {
-          var row1 = results.rows[0];
-          var row2 = results.rows[1];
-          this.swapIn(row1, row2, "inputspectype");
-          this.swapIn(row1, row2, "outputspectype");
+          var apis = [];
+          for (var i = 0; i < results.rows.length; i+=2) {
+            var row1 = results.rows[i];
+            var row2 = results.rows[i+1];
+            this.swapIn(row1, row2, "inputspectype");
+            this.swapIn(row1, row2, "outputspectype");
 
-          row1.examplesjson = JSON.parse(row1.examplesjson);
-          delete row1.id;
-          delete row1.json;
-
-          done(null, { apis: [ row1 ], err: null });
+            row1.examplesjson = JSON.parse(row1.examplesjson);
+            delete row1.id;
+            delete row1.json;
+            apis.push(row1)
+          }
+          done(null, { apis: apis, err: null });
         }
       }.bind(this));
     }.bind(this));
+  },
+
+  constraintsForApiIds: function(apiIds) {
+    var components = []
+    var dollarCount = 1;
+    for (var i = 0; i < apiIds.length; i++) {
+      components.push("(apispecs.namespace = $" + dollarCount++ + 
+        " AND apispecs.name = $" + dollarCount++ +
+        " AND apispecs.version = $" + dollarCount++ + ")");
+    }
+    return "(" + components.join(" OR ") + ")";
   },
 
   swapIn: function(row1, row2, key) {
