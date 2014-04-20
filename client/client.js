@@ -2,9 +2,17 @@ var cloasis = require('./cloasis').Cloasis;
 
 var WebSocketServer = require('ws').Client;
 
-cloasis.loginUser('evan', 'arst', function(err, session){
-  if (err)
-    throw err;
+cloasis.registerUser('evan', 'arst', function(err, session){
+  if (err) {
+    cloasis.loginUser('evan', 'arst', onLogin)
+  } else {
+    onLogin(err, session);
+  }
+});
+
+
+function onLogin(err, session) {
+  if (err) throw err;
 
   var apiId = { 
     username: 'evan', 
@@ -28,7 +36,7 @@ cloasis.loginUser('evan', 'arst', function(err, session){
       });
     });
   });
-});
+}
 
 function isPrime(input, done){
   var n = input.n;
