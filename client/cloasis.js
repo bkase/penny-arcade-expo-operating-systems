@@ -95,7 +95,7 @@
     },
     info: function(){
       var apiIds = Array.prototype.slice.call(arguments, 0);
-      var done = apiSpecs.pop();
+      var done = apiIds.pop();
 
       this.rpc.call('info', {
         apiIdentifiers: apiIds,

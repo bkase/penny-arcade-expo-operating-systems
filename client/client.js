@@ -14,7 +14,7 @@ cloasis.registerUser('evan', 'arst', function(err, session){
 function onLogin(err, session) {
   if (err) throw err;
 
-  var apiId = { 
+  var apiSpec = { 
     username: 'evan', 
     namespace: "evan.test", 
     name: "isPrime", 
@@ -25,14 +25,23 @@ function onLogin(err, session) {
     outputSpec: { "much": "more" }
   };
 
-  session.register(apiId, function(err){
+  var apiId = {
+    name: "isPrime", 
+    namespace: "evan.test", 
+    version: 0.1
+  };
+
+  session.register(apiSpec, function(err){
     session.activate({ fn: isPrime, apiIdentifier: apiId }, function(err){
       if (err)
         throw err;
-      session.call(apiId, { n: 7 }, function(err, output){
-        if (err)
-          throw err;
+      session.info(apiId, function(err, output){
         console.log(output);
+        session.call(apiId, { n: 7 }, function(err, output){
+          if (err)
+            throw err;
+          console.log(output);
+        });
       });
     });
   });

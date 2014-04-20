@@ -224,7 +224,50 @@ DB.prototype = {
   },
 
   infoAPIs: function(apiIds, done){
+    pg.connect(this.conString, function(err, client, freeClient) {
+      // TODO: make sure no DUPEs in specs
+      if (err) {
+        done(err);
+        return;
+      }
 
+
+      var specs = schema.apispecs;
+      var spectypes = schema.spectypes;
+      //var query = specs.select(specs.star()).from(specs).from(spectypes).where(specs.inputspectype.equals(spectypes.id)).or(specs.outputspectype.equals(spectypes.id));
+      var queryText = "SELECT * FROM apispecs, spectypes WHERE (apispecs.inputspectype = spectypes.id OR apispecs.outputspectype = spectypes.id) AND (apispecs.namespace = $1)";
+      console.log(queryText, [ apiIds[0].namespace ]);
+      client.query(queryText, [ apiIds[0].namespace ], function(err, results) {
+        freeClient();
+
+        if (err) {
+          return done(err);
+        } else if (results.rows.length < 2) {
+          return done({ err: "Couldn't find info for this apiId" });
+        } else {
+          var row1 = results.rows[0];
+          var row2 = results.rows[1];
+          this.swapIn(row1, row2, "inputspectype");
+          this.swapIn(row1, row2, "outputspectype");
+
+          row1.examplesjson = JSON.parse(row1.examplesjson);
+          delete row1.id;
+          delete row1.json;
+
+          done(null, { apis: [ row1 ], err: null });
+        }
+      }.bind(this));
+    }.bind(this));
+  },
+
+  swapIn: function(row1, row2, key) {
+    if (row1.id == row1[key]) {
+      row1[key] = JSON.parse(row1.json);
+    } else if (row2.id == row1[key]) {
+      row1[key] = JSON.parse(row2.json);
+    } else {
+      throw "bad results";
+    }
   },
 
   //should activate/deactive be in memory or in the db?
