@@ -14,9 +14,20 @@ cloasis.registerUser('evan', 'arst', function(err, session){
 function onLogin(err, session) {
   if (err) throw err;
 
-  var apiSpec = { 
+  var isPrimeSpec = { 
     username: 'evan', 
-    namespace: "evan.test.notprime", 
+    namespace: "evan.test.isPrime", 
+    name: "isPrime", 
+    version: 0.1,
+    description: "Tests for not not a prime number",
+    examples: [ { "some": "json" } ],
+    inputSpec: { "a": "json" },
+    outputSpec: { "b": "json" }
+  };
+
+  var isNotPrimeSpec = { 
+    username: 'evan', 
+    namespace: "evan.test.isNotPrime", 
     name: "isNotPrime", 
     version: 0.1,
     description: "Tests for not a prime number",
@@ -25,23 +36,25 @@ function onLogin(err, session) {
     outputSpec: { "b": "json" }
   };
 
-  var apiId1 = {
-    name: "isNotPrime", 
-    namespace: "evan.test.notprime", 
-    version: 0.1
-  };
-
   var apiId2 = {
-    name: "isPrime", 
-    namespace: "evan.test",
+    name: "isNotPrime", 
+    namespace: "evan.test.isNotPrime", 
     version: 0.1
   };
 
-  session.register(apiSpec, function(err){
+  var apiId1 = {
+    name: "isPrime", 
+    namespace: "evan.test.isPrime",
+    version: 0.1
+  };
+
+  session.register(isPrimeSpec, isNotPrimeSpec, function(err){
     session.activate({ fn: isPrime, apiIdentifier: apiId1 }, function(err){
       if (err)
         throw err;
       session.info(apiId1, apiId2, function(err, output){
+        if (err)
+          throw err;
         console.log(output);
         session.call(apiId1, { n: 7 }, function(err, output){
           if (err)

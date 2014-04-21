@@ -1,6 +1,28 @@
 ;(function(exports, module) {
 
+  function Count(num, fn){
+    this.num = num;
+    this.fn = fn;
+  }
+
+  Count.prototype = {
+    constructor: Count,
+
+    sub: function(){
+      this.num -= 1;
+      if (this.num == 0)
+        this.fn();
+    }
+
+  }
+
   var Utils = {
+    count: function(){
+      var count = Object.create(Count.prototype);
+      Count.apply(count, arguments);
+      return count;
+    },
+    Count: Count,
     makeEventable: function(module){
       module.on = function(event, fn){
         if (!this['on' + event])
@@ -32,6 +54,7 @@
       module.off = function(event){
         delete module['on' + event];
       }.bind(module);
+      return module;
     },
     bytesToString: function(bytes){
       return bytes.map(function(c){ return String.fromCharCode(c); }).join('')
