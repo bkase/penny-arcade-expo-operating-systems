@@ -14,7 +14,7 @@ function Paxos(uid, serverRPCPool){
   this.uid = uid;
 
   this.numServers = this.serverRPCPool.length + 1;
-  this.numQuorum = this.numServers/2.0;
+  this.numQuorum = Math.ceil(this.numServers/2.0);
 
   this.CANCEL = 'cancel';
   this.OK = 'ok';
@@ -63,7 +63,7 @@ Paxos.prototype = {
           this.emit('commit', biggestNaVa);
           //TODO check isValid
         }
-        if (numOK > this.numQuorum){
+        if (numOK >= this.numQuorum){
           next(null, N, request.value);
         }
         else {
@@ -83,7 +83,7 @@ Paxos.prototype = {
             }
           }
         }.bind(this));
-        if (numOK > this.numQuorum){
+        if (numOK >= this.numQuorum){
           next(null, request.value);
         }
         else {
@@ -102,8 +102,7 @@ Paxos.prototype = {
 
   _sendPrepare: function(N, done){
     var outputs = [];
-    //TODO only waiting for QUORUM?
-    var count = Utils.count(this.numServers, function(){
+    var count = Utils.count(this.numQuorum, function(){
       done(null, outputs);
     }.bind(this))
     this._broadcast('paxos.prepare', { N: N }, function(err, output){
@@ -114,8 +113,7 @@ Paxos.prototype = {
   
   _sendAccept: function(N, V, done){
     var outputs = [];
-    //TODO only waiting for QUORUM?
-    var count = Utils.count(this.numServers, function(){
+    var count = Utils.count(this.numQuorum, function(){
       done(null, outputs);
     }.bind(this));
     this._broadcast('paxos.accept', { N: N, V: V }, function(err, output){
