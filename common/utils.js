@@ -67,7 +67,7 @@
           }
         }
         else {
-          console.log('dropped', event);
+          console.log(module.name, 'dropped', event);
         }
       }.bind(module);
       module.ison = function(event){

@@ -3,10 +3,13 @@ var RPC = require('../common/rpc').RPC;
 
 function Paxos(uid, serverRPCPool){
   Utils.makeEventable(this);
+  this.uid = uid;
   this.serverRPCPool = serverRPCPool;
   serverRPCPool.forEach(this._addServerRPC.bind(this));
 
   this.rpc = new RPC(Utils.makeEventable({}));
+  this.rpc.name = uid;
+
   this._addServerRPC(this.rpc);
 
   this.DEBUG = false;
@@ -16,7 +19,6 @@ function Paxos(uid, serverRPCPool){
 
   this.Na = 0;
   this.Va = null;
-  this.uid = uid;
 
   this.numServers = this.serverRPCPool.length + 1;
   this.numQuorum = Math.ceil(this.numServers/2.0);
@@ -36,9 +38,10 @@ Paxos.prototype = {
     return this.commitLog.length-1;
   },
 
-  request: function(v, isValid){
+  request: function(v, isValid, Iopt){
     this.requestQueue.push({
       value: v,
+      I: Iopt,
       isValid: isValid
     });
     this._processQueue();
@@ -48,7 +51,15 @@ Paxos.prototype = {
     var request = this.requestQueue.shift();
     //TODO CONFLICT? isValid?
     var N = this.Na+1;
-    var I = this.I()+1;
+    var I = (request.I == null) ? (this.I()+1) : request.I;
+
+    this.doPaxos(request, N, I, function(err){
+      if (err)
+        console.log(err);
+    });
+  },
+
+  doPaxos: function(request, N, I, done){
     Utils.waterfall([
       this._sendPrepare.bind(this),
       function(outputs, next){
@@ -56,6 +67,7 @@ Paxos.prototype = {
         var biggestNa = null;
         var biggestNaVa = null
         var biggestI = null;
+        var reqIV = null;
         outputs.forEach(function(data){
           if (data.err){
             next(data.err)
@@ -69,20 +81,34 @@ Paxos.prototype = {
               if (biggestI == null || output.I > biggestI){
                 biggestI = output.I;
               }
+              if ('reqIV' in output){
+                if (reqIV == null){
+                  reqIV = output.reqIV;
+                }
+                //TODO rm this
+                else if (JSON.stringify(reqIV) !== JSON.stringify(output.reqIV)){
+                  throw new Error('wtf they aren\'t the same');
+                }
+              }
               numOK += 1;
             }
           }
         }.bind(this));
-        if (biggestNaVa != null){
+        if (I <= biggestI){
+          if (reqIV != null){
+            this._commit({ V: reqIV, I: I }, function(){ });
+          }
+          this._checkAndReq(this.oldestMissedI);
+          next('prepare failed, missed iter :(');
+          return;
+        }
+        else if (biggestNaVa != null){
+          console.log("bnava");
           this.emit('commit', biggestNaVa);
           //TODO check isValid
         }
         if (numOK < this.numQuorum){
           next('prepare failed, no quorum :(');
-        }
-        else if (I <= biggestI){
-          //TODO actually ask for it
-          next('prepare failed, missed iter :(');
         }
         else {
           next(null, N, request.value, I);
@@ -111,9 +137,10 @@ Paxos.prototype = {
       this._sendCommit.bind(this)
     ], function(err){
       if (err)
-        throw err;
-      
-    }, [N]);
+        done(err);
+      else
+        done(null)
+    }, [N, I]);
   },
 
   //=========== Helpers ===========
@@ -126,13 +153,13 @@ Paxos.prototype = {
     }
   },
 
-  _sendPrepare: function(N, done){
-    this._debug('sendPrepare');
+  _sendPrepare: function(N, I, done){
+    this._debug('sendPrepare', N, I);
     var outputs = [];
     var count = Utils.count(this.numQuorum, function(){
       done(null, outputs);
     }.bind(this))
-    this._broadcast('paxos.prepare', { N: N }, function(err, output){
+    this._broadcast('paxos.prepare', { N: N, I: I }, function(err, output){
       outputs.push({ err: err, output: output });
       count.sub()
     }.bind(this));
@@ -159,6 +186,7 @@ Paxos.prototype = {
   _prepare: function(data, done){
     this._debug('gotPrepare');
     var N = data.N;
+    var I = data.I;
     var res = {
       uid: this.uid
     }
@@ -169,8 +197,17 @@ Paxos.prototype = {
       res.Va = this.Va;
       res.Na = this.Na;
       res.I = this.I();
+      if (I in this.commitLog){
+        res.reqIV = this.commitLog[I];
+      }
     }
     done(res);
+  },
+  _checkAndReq: function(I){
+    if (this.oldestMissedI < I){
+      this.request('nop', function(){ return true; }, this.oldestMissedI);
+      this._debug('we need an i!', this.oldestMissedI, I);
+    }
   },
   _accept: function(data, done){
     var N = data.N;
@@ -186,9 +223,7 @@ Paxos.prototype = {
     } else if (N > this.Na){
       this.Va = V;
       this.Na = N;
-      if (this.I()+1 < I){
-        console.log(this.uid, "we need an i!", this.I(), I);
-      }
+      this._checkAndReq(I);
       res.status = this.OK;
     } else {
       res.status = this.CANCEL;
@@ -196,12 +231,14 @@ Paxos.prototype = {
     done(res);
   },
   _commit: function(data, done){
-    this._debug('gotCommit');
+    this._debug('gotCommit', data);
+    this.Va = null;
+    this.Na = null;
     var V = data.V;
     var I = data.I;
     this.commitLog[I] = V;
     while (this.commitLog[this.oldestMissedI] != null){
-      this.emit('commit', V);
+      this.emit('commit', this.commitLog[this.oldestMissedI]);
       this.oldestMissedI++;
     }
     done();
@@ -221,6 +258,7 @@ Paxos.prototype = {
   },
 
   _addServerRPC: function(rpc){
+
     rpc.on('paxos.prepare', this._prepare.bind(this));
     rpc.on('paxos.accept', this._accept.bind(this));
     //rpc.on('paxos.accepted', this._accepted.bind(this));

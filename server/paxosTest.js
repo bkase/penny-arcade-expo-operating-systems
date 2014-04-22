@@ -19,8 +19,8 @@ for (var i = 0; i < N; i++){
     wss.on('connection', function(ws) {
       var conn = new Connection(ws, successRate);
       var rpc = new RPC(conn);
+      rpc.name = i;
       rpc.on('setFrom', function(from, done){
-        //console.log('o', i, from);
         rpc.id = i + ',' + from;
         rpcs[i].push(rpc);
         done();
@@ -30,12 +30,13 @@ for (var i = 0; i < N; i++){
 }
 
 
-var toConn = N;
+var toConn = (N*(N-1))/2;
 
 for (var i = 0; i < N; i++){
   for (var j = i+1; j < N; j++){
     var conn = new Connection(new WebSocket('ws://localhost:' + (startPort + j)), successRate);
     var rpc = new RPC(conn);
+    rpc.name = i;
     with ({i: i, j: j, conn: conn, rpc: rpc }){
       conn.on('open', function() {
         rpc.call('setFrom', i, function(){
@@ -55,18 +56,20 @@ for (var i = 0; i < N; i++){
 function next(){
   var paxoss = [];
   for (var i = 0; i < N; i++){
+    rpcs[i].forEach(function(rpc){
+      rpc.conn.startBeingShitty();
+    });
     paxoss[i] = new Paxos(i, rpcs[i]);
     with ({i: i}){
       paxoss[i].on('commit', function(v){
-        console.log(i, 'commit', v)
-        if (i == 0 && doNext){
-          console.log("!");
-          paxoss[0].request({ d: '2' }, function(){ return true; });
-          doNext = false;
+        console.log(i, 'got', 'commit', v)
+        if (i == 0 && j < 3){
+          j += 1;
+          paxoss[0].request({ d: j }, function(){ return true; });
         }
       });
     }
   }
-  var doNext = true;
-  paxoss[0].request({ d: '1' }, function(){ return true; });
+  var j = 0;
+  paxoss[0].request({ d: j }, function(){ return true; });
 }

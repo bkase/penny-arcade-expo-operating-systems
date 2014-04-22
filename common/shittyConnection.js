@@ -11,14 +11,19 @@
   function ShittyConnection(){
     var args = Utils.arrayify(arguments);
     this.successRate = args.pop();
+    this.active = false;
     Connection.apply(this, args);
   }
 
   ShittyConnection.prototype = Object.create(Connection.prototype);
   ShittyConnection.prototype.constructor = ShittyConnection;
 
+  ShittyConnection.prototype.startBeingShitty = function(){
+    this.active = true;
+  }
+
   ShittyConnection.prototype.send = function(){
-    if (rng.nextFloat() < this.successRate){
+    if (!this.active || rng.nextFloat() < this.successRate){
       return Connection.prototype.send.apply(this, arguments);
     }
   }
