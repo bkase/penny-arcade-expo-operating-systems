@@ -16,6 +16,27 @@
 
   }
 
+  //http://stackoverflow.com/questions/424292/seedable-javascript-random-number-generator
+  function RNG(seed){
+    //from GCC
+    this.m = 0x100000000;
+    this.a = 1103515245;
+    this.c = 12345;
+    
+    this.state = seed
+  }
+
+  RNG.prototype = {
+    constructor: RNG,
+    nextInt: function(){
+      this.state = (this.a*this.state+this.c)%this.m;
+      return this.state;
+    },
+    nextFloat: function(){
+      return this.nextInt() / (this.m-1);
+    }
+  }
+
   var Utils = {
     count: function(){
       var count = Object.create(Count.prototype);
@@ -23,6 +44,7 @@
       return count;
     },
     Count: Count,
+    RNG: RNG,
     makeEventable: function(module){
       module.on = function(event, fn){
         if (!this['on' + event])
