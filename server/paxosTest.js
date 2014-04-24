@@ -69,11 +69,7 @@ function testWhenLeaderDies(paxoss){
   paxoss.forEach(function(paxos){
     var commits = {};
     paxos.on('commit', function(v){
-      if (commits[v.d]){
-        throw new Error(paxos.uid + ' duplicate v.d! ' + v.d);
-      }
-      commits[v.d] = true;
-      console.log(paxos.uid, 'got', 'commit', v)
+      checkCommits(paxos.uid, commits, v);
     });
   });
   paxoss[0].on('sendAccept', function(){
@@ -96,11 +92,7 @@ function testWhenNonLeaderDies(paxoss){
   paxoss.forEach(function(paxos){
     var commits = {};
     paxos.on('commit', function(v){
-      if (commits[v.d]){
-        throw new Error(paxos.uid + ' duplicate v.d! ' + v.d);
-      }
-      commits[v.d] = true;
-      console.log(paxos.uid, 'got', 'commit', v)
+      checkCommits(paxos.uid, commits, v);
       if (paxos.uid == 0 && v.d === '0'){
         paxos.serverRPCPool[0].conn.dropAll();
         paxos.request({ d: '1' }, function(){ return true; });
@@ -117,11 +109,7 @@ function testWhenShitty(paxoss, requests){
     });
     var commits = {};
     paxos.on('commit', function(v){
-      if (commits[v.d]){
-        throw new Error(paxos.uid + ' duplicate v.d! ' + v.d);
-      }
-      commits[v.d] = true;
-      console.log(i, 'got', 'commit', v)
+      checkCommits(paxos.uid, commits, v);
       if (paxos.uid == 0 && requests > 0){
         requests -= 1;
         paxos.request({ d: requests }, function(){ return true; });
@@ -130,4 +118,17 @@ function testWhenShitty(paxoss, requests){
   });
   requests -= 1;
   paxoss[0].request({ d: requests }, function(){ return true; });
+}
+
+function checkCommits(uid, commits, v){
+  if (commits[v.d]){
+    throw new Error(uid + ' duplicate v.d! ' + v.d);
+  }
+  commits[v.d] = true;
+  for (var i = 0; i < v.d; i++){
+    if (!(v.d in commits)){
+      throw new Error(uid + ' missing v.d! ' + v.d);
+    }
+  }
+  console.log(uid, 'got', 'commit', v)
 }
