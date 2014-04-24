@@ -22,6 +22,10 @@
     this.active = true;
   }
 
+  ShittyConnection.prototype.stopBeingShitty = function(){
+    this.active = false;
+  }
+
   ShittyConnection.prototype.send = function(){
     if (!this.active || rng.nextFloat() < this.successRate){
       return Connection.prototype.send.apply(this, arguments);
@@ -31,6 +35,11 @@
   ShittyConnection.prototype.dropAll = function(){
     this.successRate = 0;
     this.startBeingShitty();
+  }
+
+  ShittyConnection.prototype.dropNone = function(){
+    this.successRate = 1;
+    this.stopBeingShitty();
   }
 
   exports.Connection = ShittyConnection;

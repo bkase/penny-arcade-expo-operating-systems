@@ -70,9 +70,16 @@
           console.log(module.name, 'dropped', event);
         }
       }.bind(module);
+      module.once = function(event, fn){
+        module.on(event, function(){
+          fn.apply(null, arguments);
+          module.off(event);
+        });
+      }
       module.ison = function(event){
         return module['on' + event] != null;
       }.bind(module);
+      //TODO removes all fns on events
       module.off = function(event){
         delete module['on' + event];
       }.bind(module);

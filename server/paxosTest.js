@@ -60,12 +60,90 @@ function next(){
   for (var i = 0; i < N; i++){
     paxoss[i] = new Paxos(i, rpcs[i]);
   }
-  //testWhenShitty(paxoss, 100);
+  testWhenShitty(paxoss, 100);
   //testWhenNonLeaderDies(paxoss);
-  testWhenLeaderDies(paxoss);
+  //testWhenLeaderDies0(paxoss);
+  //testWhenLeaderDies1(paxoss);
+  //testWhenLeaderDies2(paxoss);
+  //testWhenAcceptFails(paxoss);
 }
 
-function testWhenLeaderDies(paxoss){
+function testWhenAcceptFails(paxoss){
+  paxoss.forEach(function(paxos){
+    var commits = {};
+    paxos.on('commit', function(v){
+      checkCommits(paxos.uid, commits, v);
+    });
+  });
+  paxoss[0].once('sendAccept', function(){
+    paxoss[1].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 0)
+        rpc.conn.dropAll();
+    });
+    paxoss[2].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 0)
+        rpc.conn.dropAll();
+    });
+  });
+  paxoss[0].once('retry', function(){
+    paxoss[1].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 0)
+        rpc.conn.dropNone();
+    });
+    paxoss[2].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 0)
+        rpc.conn.dropNone();
+    });
+  });
+  paxoss[0].request({ d: '0' }, function(){ return true; });
+}
+
+function testWhenLeaderDies2(paxoss){
+  paxoss.forEach(function(paxos){
+    var commits = {};
+    paxos.on('commit', function(v){
+      checkCommits(paxos.uid, commits, v);
+    });
+  });
+  paxoss[0].on('sendAccept', function(){
+    paxoss[0].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 1)
+        rpc.conn.dropAll();
+    });
+  });
+  paxoss[0].on('sendCommit', function(){
+    paxoss[0].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 1)
+        rpc.conn.dropAll();
+    });
+    paxoss[1].request({ d: '1' }, function(){ return true; });
+  });
+  paxoss[0].request({ d: '0' }, function(){ return true; });
+}
+
+function testWhenLeaderDies1(paxoss){
+  paxoss.forEach(function(paxos){
+    var commits = {};
+    paxos.on('commit', function(v){
+      checkCommits(paxos.uid, commits, v);
+    });
+  });
+  paxoss[0].on('sendAccept', function(){
+    paxoss[0].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 1)
+        rpc.conn.dropAll();
+    });
+  });
+  paxoss[0].on('sendCommit', function(){
+    paxoss[0].serverRPCPool.forEach(function(rpc){
+      rpc.conn.dropAll();
+    });
+    paxoss[1].request({ d: '1' }, function(){ return true; });
+  });
+  paxoss[0].request({ d: '0' }, function(){ return true; });
+}
+
+function testWhenLeaderDies0(paxoss){
   paxoss.forEach(function(paxos){
     var commits = {};
     paxos.on('commit', function(v){
@@ -121,14 +199,15 @@ function testWhenShitty(paxoss, requests){
 }
 
 function checkCommits(uid, commits, v){
+  console.log(uid, 'got', 'commit', v)
   if (commits[v.d]){
     throw new Error(uid + ' duplicate v.d! ' + v.d);
   }
   commits[v.d] = true;
+  //TODO might be broken
   for (var i = 0; i < v.d; i++){
     if (!(v.d in commits)){
       throw new Error(uid + ' missing v.d! ' + v.d);
     }
   }
-  console.log(uid, 'got', 'commit', v)
 }

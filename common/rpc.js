@@ -32,7 +32,7 @@
       setTimeout(function(){
         if (!this.gotCallByRequestId[requestId]){
           this.gotCallByRequestId[requestId] = true;
-          this.fnTable[requestId](new Error('timeout'));
+          this.fnTable[requestId]('timeout');
           delete this.fnTable[requestId];
         }
       }.bind(this), this.TIMEOUT);
