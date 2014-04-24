@@ -11,7 +11,9 @@
     this.prependConn = !!prependConn;
     Utils.makeEventable(this);
     this.nextRequestId = 0;
+    this.gotCallByRequestId = {};
     this.fnTable = [];
+    this.TIMEOUT = 2000;
     this.conn.on('msg', this.parseMsg.bind(this));
     this.conn.on('close', function(){
       this.emit('close', this);
@@ -27,13 +29,21 @@
         name: name,
         input: input
       }));
+      setTimeout(function(){
+        if (!this.gotCallByRequestId[requestId]){
+          this.gotCallByRequestId[requestId] = true;
+          this.fnTable[requestId](new Error('timeout'));
+          delete this.fnTable[requestId];
+        }
+      }.bind(this), this.TIMEOUT);
       this.fnTable[requestId] = done;
     },
     parseMsg: function(bytes){
       var json = Utils.bytesToJSON(bytes);
       if (json.resultId != null){
         var id = json.resultId;
-        if (id in this.fnTable){
+        if (id in this.fnTable && !this.gotCallByRequestId[id]){
+          this.gotCallByRequestId[id] = true;
           this.fnTable[id](null, json.input);
           delete this.fnTable[id];
         } else {

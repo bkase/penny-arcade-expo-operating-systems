@@ -117,14 +117,21 @@
       });
     },
     waterfall: function(fns, done, args){
+      if (done.__beenCalled == null)
+        done.__beenCalled = false;
       args = args || [];
       if (fns.length === 0){
         done.apply(null, [null].concat(args));
       }
       else {
         fns.shift().apply(null, args.concat([function(err){
-          if (err)
+          if (done.__beenCalled){
+            throw new Error('its been called what are you doing!');
+          }
+          else if (err){
+            done.__beenCalled = true;
             done(err);
+          }
           else 
             Utils.waterfall(fns, done, Array.prototype.slice.call(arguments, 1));
         }]));

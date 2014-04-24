@@ -28,6 +28,11 @@
     }
   }
 
+  ShittyConnection.prototype.dropAll = function(){
+    this.successRate = 0;
+    this.startBeingShitty();
+  }
+
   exports.Connection = ShittyConnection;
 
 }).apply(null, [typeof exports !== 'undefined' ? exports : this,
