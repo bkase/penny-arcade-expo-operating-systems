@@ -30,6 +30,8 @@ function Paxos(uid, serverRPCPool){
   this.CANCEL = 'cancel';
   this.OK = 'ok';
 
+  this.paxosInProgress = false;
+
   this.requestQueue = [];
 }
 
@@ -50,12 +52,21 @@ Paxos.prototype = {
       isValid: isValid
     };
     this.requestQueue.push(request);
-    this._debug('make request', request);
-    this._processQueue();
+    this._debug('enqueue request', request);
+
+    if (!this.paxosInProgress){
+      this._processQueue();
+    }
   },
 
   _processQueue: function(){
     var request = this.requestQueue.shift();
+    this._debug('s', request);
+    if (request == null){
+      this.paxosInProgress = false;
+      return;
+    }
+    this.paxosInProgress = true;
     //TODO CONFLICT? isValid?
     var N = this.N+1;
     var I = (request.I == null) ? (this.I()+1) : request.I;
@@ -67,15 +78,15 @@ Paxos.prototype = {
         if (!request.retry && err === 'prepare failed, missed I, got I'){
           this._debug('no retry');
         } else {
-          this.requestQueue.push(request);
-          process.nextTick(function(){
-            this._processQueue();
-          }.bind(this));
+          this.requestQueue.unshift(request);
           this.Va = null;
           this.Na = null;
           this._debug('retry');
         }
       }
+      process.nextTick(function(){
+        this._processQueue();
+      }.bind(this));
     }.bind(this));
   },
 
@@ -98,7 +109,7 @@ Paxos.prototype = {
             bailEarly = true;
           } else {
             var output = data.output;
-            this._debug('resPrep', output);
+            //this._debug('resPrep', output);
             if ('reqIV' in output){
               if (reqIV == null){
                 reqIV = output.reqIV;
@@ -144,8 +155,10 @@ Paxos.prototype = {
           return;
         }
         else if (biggestNaVa != null){
-          this._debug("bnava");
-          this.emit('commit', biggestNaVa);
+          this._debug("bnava", request);
+          this.request(request.value, request.isValid);
+          request.value = biggestNaVa;
+          request.isValid = function(){ return true; };
           //TODO check isValid
         }
         if (numOK < this.numQuorum){
@@ -228,7 +241,8 @@ Paxos.prototype = {
       }.bind(this)).reduce(function(a,b){
         return a + ', ' + b;
       });
-      console.log(str[this._uidToColor()]);
+      var str = str[this._uidToColor()];
+      console.log(str);
     }
   },
 
@@ -258,8 +272,14 @@ Paxos.prototype = {
 
   _sendCommit: function(V, I, done){
     this._debug('sendCommit');
-    this._broadcast('paxos.commit', { V: V, I: I, uid: this.uid }, function(err){ });
-    done(null);
+    if (!this.die){
+      this._broadcast('paxos.commit', { V: V, I: I, uid: this.uid }, function(err){ });
+      done(null);
+    }
+    else {
+      this.die = false;
+      done('i died');
+    }
   },
 
   _prepare: function(data, done){

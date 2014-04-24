@@ -21,6 +21,7 @@ for (var i = 0; i < N; i++){
       var rpc = new RPC(conn);
       rpc.name = i;
       rpc.on('setFrom', function(from, done){
+        rpc.targetName = from;
         rpc.id = i + ',' + from;
         rpcs[i].push(rpc);
         done();
@@ -37,6 +38,7 @@ for (var i = 0; i < N; i++){
     var conn = new Connection(new WebSocket('ws://localhost:' + (startPort + j)), successRate);
     var rpc = new RPC(conn);
     rpc.name = i;
+    rpc.targetName = j;
     with ({i: i, j: j, conn: conn, rpc: rpc }){
       conn.on('open', function() {
         rpc.call('setFrom', i, function(){
@@ -76,8 +78,16 @@ function testWhenLeaderDies(paxoss){
   });
   paxoss[0].on('sendAccept', function(){
     paxoss[0].serverRPCPool.forEach(function(rpc){
+      if (rpc.targetName == 1)
+        rpc.conn.dropAll();
+    });
+  });
+  paxoss[0].on('sendCommit', function(){
+    paxoss[0].die = true;
+    paxoss[0].serverRPCPool.forEach(function(rpc){
       rpc.conn.dropAll();
     });
+    paxoss[1].request({ d: '1' }, function(){ return true; });
   });
   paxoss[0].request({ d: '0' }, function(){ return true; });
 }
