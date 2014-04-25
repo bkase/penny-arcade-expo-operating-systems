@@ -5,7 +5,7 @@ var WebSocket = require('ws');
 var Paxos = require('./paxos').Paxos;
 
 
-var N = 3;
+var N = 7;
 
 var successRate = .8;
 

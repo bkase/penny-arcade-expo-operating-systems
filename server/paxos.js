@@ -58,7 +58,8 @@ Paxos.prototype = {
       I: Iopt,
       seq: (seqNum == null) ? this.seq++ : seqNum,
       retry: (retryOpt == null) ? true : false,
-      isValid: isValid
+      isValid: isValid,
+      uid: this.uid
     };
     if (isHiPri){
       this.requestQueue.unshift(request);
@@ -180,20 +181,22 @@ Paxos.prototype = {
         }
         else if (
           biggestNaVa != null && 
-          !(biggestNaSEQa === request.seq && 
+          !(biggestNaSEQa <= request.seq && 
           biggestNaUIDa === this.uid)
         ){
-          this._debug("bnava", request, biggestNaSEQa);
           this.requestHiPri(request.value, request.isValid);
           request.value = biggestNaVa;
           request.isValid = function(){ return true; };
+          request.seq = biggestNaSEQa;
+          request.uid = biggestNaUIDa
+          this._debug("bnava", request);
           //TODO check isValid
         }
         if (numOK < this.numQuorum){
           next('prepare failed, no quorum :(');
         }
         else {
-          next(null, N, request.value, I, request.seq);
+          next(null, N, request.value, I, request.seq, request.uid);
         }
       }.bind(this),
       this._sendAccept.bind(this),
@@ -287,13 +290,13 @@ Paxos.prototype = {
     }.bind(this));
   },
   
-  _sendAccept: function(N, V, I, seq, done){
+  _sendAccept: function(N, V, I, seq, uid, done){
     this._debug('sendAccept');
     var outputs = [];
     var count = Utils.count(this.numQuorum, function(){
       done(null, outputs);
     }.bind(this));
-    this._broadcast('paxos.accept', { N: N, V: V, I: I, uid: this.uid, seq: seq }, function(err, output){
+    this._broadcast('paxos.accept', { N: N, V: V, I: I, uid: uid, seq: seq }, function(err, output){
       outputs.push({ err: err, output: output });
       count.sub()
     }.bind(this))
