@@ -47,7 +47,8 @@
           this.fnTable[id](null, json.input);
           delete this.fnTable[id];
         } else {
-          throw new Error('cb not in table!');
+          console.log('cb not in table!');
+          //throw new Error('cb not in table!');
         }
       } else {
         var args =[

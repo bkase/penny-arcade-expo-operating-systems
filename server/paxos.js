@@ -21,15 +21,27 @@ function Paxos(uid, serverRPCPool){
 
   this.Na = null;
   this.Va = null;
-  this.UIDa = null;
-  this.SEQa = null;
+
+  this.seqLogs = {}
+  this.serverRPCPool.forEach(function(rpc){
+    this.seqLogs[rpc.targetName] = {
+      log: [],
+      oldestMissed: 0
+    }
+  }.bind(this));
+  this.seqLogs[this.uid] = {
+    log: [],
+    oldestMissed: 0
+  }
 
   this.N = 0;
 
-  this.seq = 0;
-
   this.numServers = this.serverRPCPool.length + 1;
   this.numQuorum = Math.ceil(this.numServers/2.0);
+
+  //TODO functionize, log -> object
+  this.seqLog = [];
+  this.seq = 0;
 
   this.CANCEL = 'cancel';
   this.OK = 'ok';
@@ -49,17 +61,23 @@ Paxos.prototype = {
   },
 
   requestHiPri: function(v, isValid, Iopt, retryOpt){
-    this.request(v, isValid, Iopt, retryOpt, true);
+    this._request(v, isValid, Iopt, retryOpt, true);
   },
 
-  request: function(v, isValid, Iopt, retryOpt, isHiPri, seqNum){
+  request: function(v, isValid, Iopt, retryOpt, isHiPri){
+    this._request({
+        uid: this.uid,
+        seq: this.seq++,
+        v: v,
+      }, isValid, Iopt, retryOpt, isHiPri);
+  },
+
+  _request: function(v, isValid, Iopt, retryOpt, isHiPri){
     var request = {
       value: v,
       I: Iopt,
-      seq: (seqNum == null) ? this.seq++ : seqNum,
       retry: (retryOpt == null) ? true : false,
       isValid: isValid,
-      uid: this.uid
     };
     if (isHiPri){
       this.requestQueue.unshift(request);
@@ -77,8 +95,6 @@ Paxos.prototype = {
   _reset: function(){
     this.Va = null;
     this.Na = null;
-    this.UIDa = null;
-    this.SEQa = null;
   },
 
   _processQueue: function(){
@@ -88,26 +104,29 @@ Paxos.prototype = {
       return;
     }
     this.paxosInProgress = true;
-    //TODO CONFLICT? isValid?
-    var N = this.N+1;
-    var I = (request.I == null) ? (this.I()+1) : request.I;
+    if (request.isValid(request.value)){
+      var N = this.N+1;
+      var I = (request.I == null) ? (this.I()+1) : request.I;
 
-    this._debug('process request', request, "N", N, "I", I);
-    this.doPaxos(request, N, I, function(err){
-      if (err){
-        this._debug(err);
-        if (!request.retry && err === 'prepare failed, missed I, got I'){
-          this._debug('no retry');
-        } else {
-          this.requestQueue.unshift(request);
-          this._reset();
-          this._debug('retry');
+      this._debug('process request', request, "N", N, "I", I);
+      this.doPaxos(request, N, I, function(err){
+        if (err){
+          this._debug(err);
+          if (!request.retry && err === 'prepare failed, missed I, got I'){
+            this._debug('no retry');
+          } else {
+            this.requestQueue.unshift(request);
+            this._debug('retry');
+          }
         }
-      }
-      process.nextTick(function(){
-        this._processQueue();
+        this._reset();
+        process.nextTick(function(){
+          this._processQueue();
+        }.bind(this));
       }.bind(this));
-    }.bind(this));
+    } else {
+      this._processQueue();
+    }
   },
 
   doPaxos: function(request, N, I, done){
@@ -118,10 +137,7 @@ Paxos.prototype = {
         var biggestNa = null;
         var biggestN = null;
         var biggestNaVa = null;
-        var biggestNaUIDa = null;
-        var biggestNaSEQa = null;
-        var biggestI = null;
-        var reqIV = null;
+        var IV = null;
         var bailEarly = false;
         outputs.forEach(function(data){
           if (bailEarly)
@@ -132,24 +148,12 @@ Paxos.prototype = {
           } else {
             var output = data.output;
             //this._debug('resPrep', output);
-            if ('reqIV' in output){
-              if (reqIV == null){
-                reqIV = output.reqIV;
-              }
-              //TODO rm this
-              else if (JSON.stringify(reqIV) !== JSON.stringify(output.reqIV)){
-                throw new Error('wtf they aren\'t the same');
-              }
-            }
+            if (output.IV != null)
+              IV = output.IV;
             if (output.status === this.OK){
               if (biggestNa == null || output.Na > biggestNa){
                 biggestNa = output.Na;
                 biggestNaVa = output.Va;
-                biggestNaSEQa = output.SEQa;
-                biggestNaUIDa = output.UIDa;
-              }
-              if (biggestI == null || output.I > biggestI){
-                biggestI = output.I;
               }
               numOK += 1;
             } else {
@@ -167,36 +171,25 @@ Paxos.prototype = {
         if (biggestN != null){
           this.N = biggestN;
         }
-        if (I <= biggestI){
-          if (reqIV != null){
-            this._debug("reqiv", request);
-            this._commit({ V: reqIV, I: I, uid: this.uid }, function(){ });
-            this._checkAndReq(this.oldestMissedI);
-            next('prepare failed, missed I, got I');
-          } else {
-            this._checkAndReq(this.oldestMissedI);
-            next('prepare failed, missed I, missed I');
-          }
-          return;
+        if (IV != null){
+          this.requestHiPri(request.value, request.isValid);
+          request.value = IV;
+          request.isValid = function(){ return true; };
+          this._debug("iv", request);
         }
         else if (
-          biggestNaVa != null && 
-          !(biggestNaSEQa <= request.seq && 
-          biggestNaUIDa === this.uid)
+          biggestNaVa != null
         ){
           this.requestHiPri(request.value, request.isValid);
           request.value = biggestNaVa;
           request.isValid = function(){ return true; };
-          request.seq = biggestNaSEQa;
-          request.uid = biggestNaUIDa
           this._debug("bnava", request);
-          //TODO check isValid
         }
         if (numOK < this.numQuorum){
           next('prepare failed, no quorum :(');
         }
         else {
-          next(null, N, request.value, I, request.seq, request.uid);
+          next(null, N, request.value, I);
         }
       }.bind(this),
       this._sendAccept.bind(this),
@@ -290,13 +283,13 @@ Paxos.prototype = {
     }.bind(this));
   },
   
-  _sendAccept: function(N, V, I, seq, uid, done){
+  _sendAccept: function(N, V, I, done){
     this._debug('sendAccept');
     var outputs = [];
     var count = Utils.count(this.numQuorum, function(){
       done(null, outputs);
     }.bind(this));
-    this._broadcast('paxos.accept', { N: N, V: V, I: I, uid: uid, seq: seq }, function(err, output){
+    this._broadcast('paxos.accept', { N: N, V: V, I: I, uid: this.uid }, function(err, output){
       outputs.push({ err: err, output: output });
       count.sub()
     }.bind(this))
@@ -315,14 +308,13 @@ Paxos.prototype = {
   },
 
   _prepare: function(data, done){
-    this._debug('gotPrepare', data);
     var N = data.N;
     var I = data.I;
     var res = {
       uid: this.uid
     }
-    if (I in this.commitLog){
-      res.reqIV = this.commitLog[I];
+    if (N > this.N){
+      this.N = N;
     }
     if (this.Na >= N){
       res.N = this.Na;
@@ -331,42 +323,44 @@ Paxos.prototype = {
       res.status = this.OK;
       res.Va = this.Va;
       res.Na = this.Na;
-      res.UIDa = this.UIDa;
-      res.SEQa = this.SEQa;
-      res.I = this.I();
     }
+    if (I in this.commitLog){
+      res.IV = this.commitLog[I];
+    }
+    this._debug('gotPrepare', data, res);
     done(res);
   },
   _checkAndReq: function(I){
-    if (this.oldestMissedI < I){
-      this.requestHiPri('nop', function(){ return true; }, this.oldestMissedI, false);
+    if (this.oldestMissedI < I && !(I in this.commitLog)){
       this._debug('we need an i!', this.oldestMissedI, I);
+      this.requestHiPri('nop', function(){ 
+        return !(I in this.commitLog);
+      }.bind(this), this.oldestMissedI, false);
     }
   },
   _accept: function(data, done){
     var N = data.N;
     var V = data.V;
     var I = data.I;
-    var uid = data.uid;
-    var seq = data.seq;
-    this._debug('gotAccept', data);
+    if (N > this.N){
+      this.N = N;
+    }
     var res = {
       uid: this.uid
     }
-    if (this.I() >= I){
-      //send val if have it?
+    if (I in this.commitLog){
       res.status = this.CANCEL;
-    } else if (N > this.Na){
+    }
+    else if (N > this.Na){
       this.Va = V;
       this.Na = N;
-      this.SEQa = seq;
-      this.UIDa = uid;
       this._checkAndReq(I);
       res.status = this.OK;
     } else {
       res.N = this.Na;
       res.status = this.CANCEL;
     }
+    this._debug('gotAccept', data, res);
     done(res);
   },
   _commit: function(data, done){
@@ -374,15 +368,27 @@ Paxos.prototype = {
     this._reset();
     var V = data.V;
     var I = data.I;
+    this._checkAndReq(I);
     if (I in this.commitLog){
-      this._debug("duplicat", I, this.commitLog);
-      //throw new Error('now we\'re done');
+      this._debug("duplicat", I, data);
+      //throw new Error('duplicat bad');
       done();
       return;
     }
     this.commitLog[I] = V;
     while (this.commitLog[this.oldestMissedI] != null){
-      this.emit('commit', this.commitLog[this.oldestMissedI]);
+      V = this.commitLog[this.oldestMissedI];
+
+      if (V !== 'nop'){
+        if (
+          V.seq >= this.seqLogs[V.uid].oldestMissed && 
+          !(V.seq in this.seqLogs[V.uid].log)
+        ){
+          this.emit('commit', V.v);
+        }
+        this.seqLogs[V.uid].log[V.seq] = true;
+        //increment oldestMissed
+      }
       this.oldestMissedI++;
     }
     done();
