@@ -3,6 +3,10 @@ var RPC = require('../common/rpc').RPC;
 var colors = require('colors');
 
 //TODO ensure periodically getting info from some quorum
+
+
+var rng = new Utils.RNG(440);
+
 function Paxos(uid, serverRPCPool){
   Utils.makeEventable(this);
   this.uid = uid;
@@ -20,6 +24,7 @@ function Paxos(uid, serverRPCPool){
   this.oldestMissedI = 0;
 
   this.Na = null;
+  this.Ia = null;
   this.Va = null;
 
   this.seqLogs = {}
@@ -35,6 +40,8 @@ function Paxos(uid, serverRPCPool){
   }
 
   this.N = 0;
+
+  this.expBackoff = 5;
 
   this.numServers = this.serverRPCPool.length + 1;
   this.numQuorum = Math.ceil(this.numServers/2.0);
@@ -95,6 +102,7 @@ Paxos.prototype = {
   _reset: function(){
     this.Va = null;
     this.Na = null;
+    this.Ia = null;
   },
 
   _processQueue: function(){
@@ -104,29 +112,40 @@ Paxos.prototype = {
       return;
     }
     this.paxosInProgress = true;
-    if (request.isValid(request.value)){
-      var N = this.N+1;
-      var I = (request.I == null) ? (this.I()+1) : request.I;
-
-      this._debug('process request', request, "N", N, "I", I);
-      this.doPaxos(request, N, I, function(err){
-        if (err){
-          this._debug(err);
-          if (!request.retry && err === 'prepare failed, missed I, got I'){
-            this._debug('no retry');
-          } else {
-            this.requestQueue.unshift(request);
-            this._debug('retry');
-          }
+    //console.log(this.uid, this.expBackoff);
+    setTimeout(function(){
+      if (request.isValid(request.value)){
+        var N = this.N+1;
+        if (request.I == null && this.oldestMissedI < this.I()+1){
+          this.requestQueue.unshift(request);
+          this._checkAndReq(this.I()+1);
+          return;
         }
-        this._reset();
-        process.nextTick(function(){
-          this._processQueue();
+        var I = (request.I == null) ? (this.I()+1) : request.I;
+
+        this._debug('process request', request, "N", N, "I", I);
+        this.doPaxos(request, N, I, function(err){
+          if (err){
+            this._debug(err);
+            if (!request.retry && err === 'prepare failed, missed I, got I'){
+              this._debug('no retry', request);
+            } else {
+              this.requestQueue.unshift(request);
+              this._debug('retry', request);
+            }
+            this.expBackoff *= 2+ -.5 + rng.nextFloat();
+          } else {
+            this.expBackoff = 5;
+          }
+          this._reset();
+          process.nextTick(function(){
+            this._processQueue();
+          }.bind(this));
         }.bind(this));
-      }.bind(this));
-    } else {
-      this._processQueue();
-    }
+      } else {
+        this._processQueue();
+      }
+    }.bind(this), this.expBackoff);
   },
 
   doPaxos: function(request, N, I, done){
@@ -137,6 +156,7 @@ Paxos.prototype = {
         var biggestNa = null;
         var biggestN = null;
         var biggestNaVa = null;
+        var biggestNaIa = null;
         var IV = null;
         var bailEarly = false;
         outputs.forEach(function(data){
@@ -153,6 +173,7 @@ Paxos.prototype = {
             if (output.status === this.OK){
               if (biggestNa == null || output.Na > biggestNa){
                 biggestNa = output.Na;
+                biggestNaIa = output.Ia;
                 biggestNaVa = output.Va;
               }
               numOK += 1;
@@ -172,17 +193,23 @@ Paxos.prototype = {
           this.N = biggestN;
         }
         if (IV != null){
-          this.requestHiPri(request.value, request.isValid);
+          if (request.value !== "nop")
+            this.requestHiPri(request.value, request.isValid);
           request.value = IV;
-          request.isValid = function(){ return true; };
+          request.isValid = function(){ return false; };
           this._debug("iv", request);
+          //this._commit({
+          //  V: IV,
+          //  I: request.I
+          //}, function(){ });
         }
         else if (
           biggestNaVa != null
         ){
           this.requestHiPri(request.value, request.isValid);
           request.value = biggestNaVa;
-          request.isValid = function(){ return true; };
+          I = biggestNaIa;
+          request.isValid = function(){ return false; };
           this._debug("bnava", request);
         }
         if (numOK < this.numQuorum){
@@ -284,7 +311,7 @@ Paxos.prototype = {
   },
   
   _sendAccept: function(N, V, I, done){
-    this._debug('sendAccept');
+    this._debug('sendAccept', N, V, I);
     var outputs = [];
     var count = Utils.count(this.numQuorum, function(){
       done(null, outputs);
@@ -296,7 +323,7 @@ Paxos.prototype = {
   },
 
   _sendCommit: function(V, I, done){
-    this._debug('sendCommit');
+    this._debug('sendCommit', V, I);
     if (!this.die){
       this._broadcast('paxos.commit', { V: V, I: I, uid: this.uid }, function(err){ });
       done(null);
@@ -310,6 +337,8 @@ Paxos.prototype = {
   _prepare: function(data, done){
     var N = data.N;
     var I = data.I;
+    if (N == null || I == null)
+      throw new Error('null check failed');
     var res = {
       uid: this.uid
     }
@@ -322,6 +351,7 @@ Paxos.prototype = {
     } else {
       res.status = this.OK;
       res.Va = this.Va;
+      res.Ia = this.Ia;
       res.Na = this.Na;
     }
     if (I in this.commitLog){
@@ -334,6 +364,11 @@ Paxos.prototype = {
     if (this.oldestMissedI < I && !(I in this.commitLog)){
       this._debug('we need an i!', this.oldestMissedI, I);
       this.requestHiPri('nop', function(){ 
+        //for (var i = 0; i < this.requestQueue.length; i++){
+        //  if (this.requestQueue[i].I === I){
+        //    return false;
+        //  }
+        //}
         return !(I in this.commitLog);
       }.bind(this), this.oldestMissedI, false);
     }
@@ -342,17 +377,23 @@ Paxos.prototype = {
     var N = data.N;
     var V = data.V;
     var I = data.I;
+    if (N == null || I == null || V == null)
+      throw new Error('null check failed');
     if (N > this.N){
       this.N = N;
     }
     var res = {
       uid: this.uid
     }
-    if (I in this.commitLog){
+    if (
+      I in this.commitLog && 
+      JSON.stringify(this.commitLog[I]) !== JSON.stringify(V)
+    ){
       res.status = this.CANCEL;
     }
     else if (N > this.Na){
       this.Va = V;
+      this.Ia = I;
       this.Na = N;
       this._checkAndReq(I);
       res.status = this.OK;
@@ -368,6 +409,8 @@ Paxos.prototype = {
     this._reset();
     var V = data.V;
     var I = data.I;
+    if (I == null || V == null)
+      throw new Error('null check failed');
     this._checkAndReq(I);
     if (I in this.commitLog){
       this._debug("duplicat", I, data);

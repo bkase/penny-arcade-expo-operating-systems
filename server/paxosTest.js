@@ -6,9 +6,9 @@ var WebSocket = require('ws');
 var Paxos = require('./paxos').Paxos;
 
 
-var N = 3;
+var N = 7;
 
-var successRate = .8
+var successRate = .8;
 
 var rpcs = [];
 
@@ -62,7 +62,7 @@ function next(){
     paxoss[i] = new Paxos(i, rpcs[i]);
   }
   //testWhenShitty(paxoss, 100);
-  testWhenShittyTakeTurns(paxoss, 1000);
+  testWhenShittyTakeTurns(paxoss, 100);
   //testWhenNonLeaderDies(paxoss);
   //testWhenLeaderDies0(paxoss);
   //testWhenLeaderDies1(paxoss);
@@ -114,7 +114,7 @@ function testWhenAcceptFails2(paxoss){
           if (rpc.targetName == 2)
             rpc.conn.dropNone();
         });
-        paxoss[0].request({ d: '0' }, function(){ return true; });
+        paxoss[0].request({ d: '1' }, function(){ return true; });
         send = false;
       }
     });
@@ -125,7 +125,7 @@ function testWhenAcceptFails2(paxoss){
         rpc.conn.dropAll();
     });
   });
-  paxoss[0].request({ d: '1' }, function(){ return true; });
+  paxoss[0].request({ d: '0' }, function(){ return true; });
 }
 
 function testWhenAcceptFails(paxoss){
@@ -255,9 +255,13 @@ function testWhenShittyTakeTurns(paxoss, requests){
         throw new Error('was less than!', paxos.uid, v.d, maxIByUID[paxos.uid]);
       } 
       maxIByUID[paxos.uid] = v.d;
-      paxos.request({ d: maxIByUID[paxos.uid]+1 }, function(v){
-        return maxIByUID[paxos.uid] < v.v.d;
-      });
+
+      if (maxIByUID[paxos.uid] < requests){
+        paxos.request({ d: maxIByUID[paxos.uid]+1 }, 
+                      function(v){ 
+                        return maxIByUID[paxos.uid] < v.v.d;
+                      });
+      }
     });
   });
   paxoss[0].request({ d: maxIByUID[0]+1 }, function(){ return true; });
