@@ -18,7 +18,7 @@ function Paxos(uid, serverRPCPool){
 
   this._addServerRPC(this.rpc);
 
-  this.DEBUG = true;
+  this.DEBUG = false;
 
   this.commitLog = [];
   this.oldestMissedI = 0;
@@ -53,7 +53,10 @@ function Paxos(uid, serverRPCPool){
   this.CANCEL = 'cancel';
   this.OK = 'ok';
 
+  this.heartbeatTimeoutId = null;
+
   this.paxosInProgress = false;
+  this.stopped = false;
 
   this.requestQueue = [];
 }
@@ -65,6 +68,11 @@ Paxos.prototype = {
 
   I: function(){
     return this.commitLog.length-1;
+  },
+
+  stop: function(){
+    clearTimeout(this.heartbeatTimeoutId);
+    this.stopped = true;
   },
 
   requestHiPri: function(v, isValid, Iopt, retryOpt){
@@ -106,9 +114,15 @@ Paxos.prototype = {
   },
 
   _processQueue: function(){
+    if (this.stopped)
+      return;
     var request = this.requestQueue.shift();
+    clearTimeout(this.heartbeatTimeoutId);
     if (request == null){
       this.paxosInProgress = false;
+      this.heartbeatTimeoutId = setTimeout(function(){
+        console.log(this.uid, 'heartbeat here');
+      }.bind(this), 1000);
       return;
     }
     this.paxosInProgress = true;
@@ -119,6 +133,7 @@ Paxos.prototype = {
         if (request.I == null && this.oldestMissedI < this.I()+1){
           this.requestQueue.unshift(request);
           this._checkAndReq(this.I()+1);
+          this._processQueue();
           return;
         }
         var I = (request.I == null) ? (this.I()+1) : request.I;

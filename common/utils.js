@@ -67,7 +67,7 @@
           }
         }
         else {
-          console.log(module.name, 'dropped', event);
+          //console.log(module.name, 'dropped', event);
         }
       }.bind(module);
       module.once = function(event, fn){
