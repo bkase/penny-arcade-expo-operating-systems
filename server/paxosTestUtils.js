@@ -13,6 +13,14 @@ function Test(N, successRate, fn, next){
   });
 }
 
+var log = console.log.bind(console);
+var oldBind = Function.prototype.bind;
+Function.prototype.bind = function(){
+  var newfn = oldBind.apply(this, arguments);
+  newfn.Name = this.name;
+  return newfn;
+}
+
 function doTests(tests, done){
   var test = tests.shift();
   if (test == null){
@@ -24,7 +32,7 @@ function doTests(tests, done){
       done(err);
       return
     }
-    console.log('passed');
+    console.log(test[0], test[1], test[2].name || test[2].Name, ' passed');
     doTests(tests, done);
   });
   Test.apply(null,test);
@@ -43,6 +51,7 @@ function startPaxoss(N, successRate, next){
       wss.on('connection', function(ws) {
         var conn = new Connection(ws, successRate);
         var rpc = new RPC(conn);
+        rpc.TIMEOUT = 100;
         rpc.name = i;
         rpc.on('setFrom', function(from, done){
           rpc.targetName = from;
@@ -61,6 +70,7 @@ function startPaxoss(N, successRate, next){
     for (var j = i+1; j < N; j++){
       var conn = new Connection(new WebSocket('ws://localhost:' + (startPort + j)), successRate);
       var rpc = new RPC(conn);
+      rpc.TIMEOUT = 100;
       rpc.name = i;
       rpc.targetName = j;
       with ({i: i, j: j, conn: conn, rpc: rpc }){

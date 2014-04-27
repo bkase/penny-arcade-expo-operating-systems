@@ -4,7 +4,6 @@ var colors = require('colors');
 
 //TODO ensure periodically getting info from some quorum
 
-
 var rng = new Utils.RNG(440);
 
 function Paxos(uid, serverRPCPool){
@@ -18,7 +17,7 @@ function Paxos(uid, serverRPCPool){
 
   this._addServerRPC(this.rpc);
 
-  this.DEBUG = false;
+  this.DEBUG = true;
 
   this.commitLog = [];
   this.oldestMissedI = 0;
@@ -59,6 +58,8 @@ function Paxos(uid, serverRPCPool){
   this.stopped = false;
 
   this.requestQueue = [];
+
+  this._processQueue();
 }
 
 Paxos.prototype = {
@@ -121,7 +122,11 @@ Paxos.prototype = {
     if (request == null){
       this.paxosInProgress = false;
       this.heartbeatTimeoutId = setTimeout(function(){
-        console.log(this.uid, 'heartbeat here');
+        console.log('hb');
+        var I = this.I()+1;
+        this.requestHiPri('nop', function(){ 
+          return !(I in this.commitLog);
+        }.bind(this), I, false);
       }.bind(this), 1000);
       return;
     }
@@ -133,7 +138,9 @@ Paxos.prototype = {
         if (request.I == null && this.oldestMissedI < this.I()+1){
           this.requestQueue.unshift(request);
           this._checkAndReq(this.I()+1);
-          this._processQueue();
+          process.nextTick(function(){
+            this._processQueue();
+          }.bind(this));
           return;
         }
         var I = (request.I == null) ? (this.I()+1) : request.I;
@@ -158,7 +165,9 @@ Paxos.prototype = {
           }.bind(this));
         }.bind(this));
       } else {
-        this._processQueue();
+        process.nextTick(function(){
+          this._processQueue();
+        }.bind(this));
       }
     }.bind(this), this.expBackoff);
   },
@@ -379,11 +388,6 @@ Paxos.prototype = {
     if (this.oldestMissedI < I && !(I in this.commitLog)){
       this._debug('we need an i!', this.oldestMissedI, I);
       this.requestHiPri('nop', function(){ 
-        //for (var i = 0; i < this.requestQueue.length; i++){
-        //  if (this.requestQueue[i].I === I){
-        //    return false;
-        //  }
-        //}
         return !(I in this.commitLog);
       }.bind(this), this.oldestMissedI, false);
     }
@@ -401,8 +405,12 @@ Paxos.prototype = {
       uid: this.uid
     }
     if (
-      I in this.commitLog && 
-      JSON.stringify(this.commitLog[I]) !== JSON.stringify(V)
+      (I in this.commitLog && 
+      JSON.stringify(this.commitLog[I]) !== JSON.stringify(V)) ||
+      V === 'nop' ||
+      (this.Ia === I &&
+       (this.Va.uid !== V.uid ||
+        this.Va.seq !== V.seq))
     ){
       res.status = this.CANCEL;
     }
@@ -434,19 +442,18 @@ Paxos.prototype = {
       return;
     }
     this.commitLog[I] = V;
+    if (V === 'nop')
+      throw new Error('3');
     while (this.commitLog[this.oldestMissedI] != null){
       V = this.commitLog[this.oldestMissedI];
-
-      if (V !== 'nop'){
-        if (
-          V.seq >= this.seqLogs[V.uid].oldestMissed && 
-          !(V.seq in this.seqLogs[V.uid].log)
-        ){
-          this.emit('commit', V.v);
-        }
-        this.seqLogs[V.uid].log[V.seq] = true;
-        //increment oldestMissed
+      if (
+        V.seq >= this.seqLogs[V.uid].oldestMissed && 
+        !(V.seq in this.seqLogs[V.uid].log)
+      ){
+        this.emit('commit', V.v);
       }
+      this.seqLogs[V.uid].log[V.seq] = true;
+      //increment oldestMissed
       this.oldestMissedI++;
     }
     done();

@@ -13,7 +13,7 @@
     this.nextRequestId = 0;
     this.gotCallByRequestId = {};
     this.fnTable = [];
-    this.TIMEOUT = 100;
+    this.TIMEOUT = 1000;
     this.conn.on('msg', this.parseMsg.bind(this));
     this.conn.on('close', function(){
       this.emit('close', this);
