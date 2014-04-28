@@ -20,7 +20,10 @@
       }.bind(this));
 
       this.socket.on('close', function(){
-        this.emit('close');
+        if (!this.closed){
+          this.closed = true;
+          this.emit('close');
+        }
       }.bind(this));
     }
     else {
@@ -34,7 +37,10 @@
       }.bind(this);
 
       this.socket.onclose = function(){
-        this.emit('close');
+        if (!this.closed){
+          this.closed = true;
+          this.emit('close');
+        }
       }.bind(this);
     }
   }
@@ -46,16 +52,28 @@
         //console.log('socket is closed');
         return;
       }
-      if ('on' in this.socket)
-        this.socket.send(bytes, {binary: true, mask: false});
-      else {
-        var array = new Uint8Array(bytes);
-        this.socket.send(array.buffer);
+      try {
+        if ('on' in this.socket)
+          this.socket.send(bytes, {binary: true, mask: false});
+        else {
+          var array = new Uint8Array(bytes);
+          this.socket.send(array.buffer);
+        }
+      } catch(e) {
+        if (!this.closed){
+          //console.log('c2', this.uid);
+          this.closed = true;
+          this.emit('close');
+        }
       }
     },
     close: function(){
-      this.closed = true;
-      this.socket.close();
+      //console.log('c1', this.uid);
+      if (!this.closed){
+        this.closed = true;
+        this.socket.close();
+        this.emit('close');
+      }
     }
   };
 

@@ -2,6 +2,12 @@ var Utils = require('../common/utils').Utils;
 var doTests = require('./paxosTestUtils').doTests;
 
 var tests = [
+  [3, 1, testNodeFailure],
+  [3, 1, testConnFailure],
+  [7, 1, testNodeFailureChain],
+]; 
+//var tests = 
+    x = [
   [3, 1, testHeartbeat],
   [3, 1, testWhenLeaderDies2],
   [3, 1, testWhenAcceptFails],
@@ -10,15 +16,15 @@ var tests = [
   [3, 1, testWhenLeaderDies0],
   [3, 1, testWhenLeaderDies1],
 
-  [3, .8, testWhenShitty.bind(null, 100)],
-  [3, .8, testMultiSend.bind(null, 100)],
-  [3, .8, testWhenShittyTakeTurns.bind(null, 100)],
-  [5, .8, testWhenShitty.bind(null, 100)],
-  [5, .8, testMultiSend.bind(null, 100)],
-  [5, .8, testWhenShittyTakeTurns.bind(null, 100)],
-  [7, .8, testWhenShitty.bind(null, 100)],
-  [7, .8, testMultiSend.bind(null, 100)],
-  [7, .8, testWhenShittyTakeTurns.bind(null, 100)],
+  [3,  .8, testWhenShitty.bind(null, 100)],
+  [3,  .8, testMultiSend.bind(null, 100)],
+  [3,  .8, testWhenShittyTakeTurns.bind(null, 100)],
+  [5,  .8, testWhenShitty.bind(null, 100)],
+  [5,  .8, testMultiSend.bind(null, 100)],
+  [5,  .8, testWhenShittyTakeTurns.bind(null, 100)],
+  [7,  .8, testWhenShitty.bind(null, 100)],
+  [7,  .8, testMultiSend.bind(null, 100)],
+  [7,  .8, testWhenShittyTakeTurns.bind(null, 100)],
   [11, .8, testWhenShitty.bind(null, 100)],
   [11, .8, testMultiSend.bind(null, 100)],
   [11, .8, testWhenShittyTakeTurns.bind(null, 100)],
@@ -44,6 +50,62 @@ doTests(tests, function(err){
   console.log(Date.now() - t0);
   process.exit(0);
 });
+
+function testConnFailure(paxoss, done){
+  var isDone = false;
+  var recoverCount = 0;
+  paxoss.forEach(function(paxos){
+    paxos.on('recovered', function(uid){
+      recoverCount++;
+      if (recoverCount == 2){
+        paxoss[uid].on('commit', function(v){
+          if (!isDone)
+            done(null);
+          isDone = true;
+        });
+      }
+    });
+  });
+  setTimeout(function(){
+    if (!isDone)
+      done(new Error('timed out'));
+    isDone = true;
+  }, 10000);
+  paxoss[1].serverRPCPool[0].conn.close();
+  paxoss[2].request('someval', function(){ return true; });
+}
+function testNodeFailureChain(paxoss, done){
+
+}
+
+function testNodeFailure(paxoss, done){
+  var r0 = false;
+  var r2 = false;
+  var isDone = false;
+  paxoss.forEach(function(paxos){
+    paxos.on('recovered', function(uid){
+      if (paxos.uid === 0){
+        r0 = true;
+      } else if (paxos.uid === 2){
+        r2 = true;
+      }
+      if (r0 && r2){
+        paxoss[1].on('commit', function(v){
+          if (!isDone)
+            done(null);
+          isDone = true;
+        });
+      }
+    });
+  });
+  setTimeout(function(){
+    if (!isDone)
+      done(new Error('timed out'));
+    isDone = true;
+  }, 3000);
+  paxoss[1].stop();
+  paxoss[0].request('someval', function(){ return true; });
+}
 
 function testHeartbeat(paxoss, done){
   var bail = false;
@@ -106,7 +168,7 @@ function testMultiSend(requests, paxoss, done){
       if (!bail){
         paxos.request({ d: is[paxos.uid], uid: paxos.uid }, function(v){
           //console.log(v.v.d, paxos.uid, iToUID[v.v.d], is[paxos.uid], v)
-          return !(v.v.d in iToUID);
+          return !(v.d in iToUID);
         });
       }
       if (is[paxos.uid] > requests){
@@ -121,9 +183,9 @@ function testMultiSend(requests, paxoss, done){
         rpc.conn.dropAll();
     });
   });
-  paxoss[0].request({ d: is[0], uid: 0 }, function(v){ return !(v.v.d in iToUID); });
-  paxoss[1].request({ d: is[1], uid: 1 }, function(v){ return !(v.v.d in iToUID); });
-  paxoss[2].request({ d: is[2], uid: 2 }, function(v){ return !(v.v.d in iToUID); });
+  paxoss[0].request({ d: is[0], uid: 0 }, function(v){ return !(v.d in iToUID); });
+  paxoss[1].request({ d: is[1], uid: 1 }, function(v){ return !(v.d in iToUID); });
+  paxoss[2].request({ d: is[2], uid: 2 }, function(v){ return !(v.d in iToUID); });
 }
 
 function testWhenAcceptFails2(paxoss, done){
@@ -351,7 +413,7 @@ function testWhenShittyTakeTurns(requests, paxoss, done){
         if (!bail){
           paxos.request({ d: maxIByUID[paxos.uid]+1 }, 
                         function(v){ 
-                          return maxIByUID[paxos.uid] < v.v.d;
+                          return maxIByUID[paxos.uid] < v.d;
                         });
         }
       } else {

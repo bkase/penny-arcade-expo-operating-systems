@@ -2,15 +2,14 @@ var Utils = require('../common/utils').Utils;
 var RPC = require('../common/rpc').RPC;
 var colors = require('colors');
 
-//TODO ensure periodically getting info from some quorum
-
 var rng = new Utils.RNG(440);
 
-function Paxos(uid, serverRPCPool){
+function Paxos(uid, serverRPCPool, kill){
   Utils.makeEventable(this);
   this.uid = uid;
   this.serverRPCPool = serverRPCPool;
   serverRPCPool.forEach(this._addServerRPC.bind(this));
+  this.kill = kill;
 
   this.rpc = new RPC(Utils.makeEventable({}));
   this.rpc.name = uid;
@@ -67,25 +66,41 @@ Paxos.prototype = {
 
   //=========== API ===========
 
-  I: function(){
-    return this.commitLog.length-1;
-  },
-
-  stop: function(){
-    clearTimeout(this.heartbeatTimeoutId);
-    this.stopped = true;
-  },
-
-  requestHiPri: function(v, isValid, Iopt, retryOpt){
-    this._request(v, isValid, Iopt, retryOpt, true);
-  },
-
   request: function(v, isValid, Iopt, retryOpt, isHiPri){
     this._request({
         uid: this.uid,
         seq: this.seq++,
         v: v,
-      }, isValid, Iopt, retryOpt, isHiPri);
+      }, function(V){ return isValid(this._extractUserData(V), V); }.bind(this), Iopt, retryOpt, isHiPri);
+  },
+
+  stop: function(){
+    clearTimeout(this.heartbeatTimeoutId);
+    for (var i = 0; i < this.serverRPCPool.length; i++){
+      this.serverRPCPool[i].conn.close();
+    }
+    this.kill();
+    this.stopped = true;
+  },
+
+  setRPC: function(uid, rpc){
+    this._addServerRPC(rpc);
+    for (var i = 0; i < this.serverRPCPool.length; i++){
+      if (this.serverRPCPool[i].targetName === rpc.targetName){
+        this.serverRPCPool[i] = rpc;
+        break;
+      }
+    }
+  },
+
+  //=========== Helpers ===========
+
+  I: function(){
+    return this.commitLog.length-1;
+  },
+
+  _requestHiPri: function(v, isValid, Iopt, retryOpt){
+    this._request(v, isValid, Iopt, retryOpt, true);
   },
 
   _request: function(v, isValid, Iopt, retryOpt, isHiPri){
@@ -108,6 +123,22 @@ Paxos.prototype = {
     }
   },
 
+  _doPaxos: function(request, N, I, done){
+    Utils.waterfall([
+      this._sendPrepare.bind(this),
+      this._processPrepare.bind(this),
+      this._sendAccept.bind(this),
+      this._processAccept.bind(this),
+      this._sendCommit.bind(this)
+    ], function(err){
+      if (err){
+        done(err);
+      } else {
+        done(null)
+      }
+    }, [request, N, I]);
+  },
+
   _reset: function(){
     this.Va = null;
     this.Na = null;
@@ -123,7 +154,7 @@ Paxos.prototype = {
       this.paxosInProgress = false;
       this.heartbeatTimeoutId = setTimeout(function(){
         var I = this.I()+1;
-        this.requestHiPri('nop', function(){
+        this._requestHiPri('nop', function(){
           return !(I in this.commitLog);
         }.bind(this), I, false);
       }.bind(this), 1000);
@@ -145,7 +176,7 @@ Paxos.prototype = {
         var I = (request.I == null) ? (this.I()+1) : request.I;
 
         this._debug('process request', request, "N", N, "I", I);
-        this.doPaxos(request, N, I, function(err){
+        this._doPaxos(request, N, I, function(err){
           if (err){
             this._debug(err);
             this.requestQueue.unshift(request);
@@ -167,121 +198,109 @@ Paxos.prototype = {
     }.bind(this), this.expBackoff);
   },
 
-  doPaxos: function(request, N, I, done){
-    Utils.waterfall([
-      this._sendPrepare.bind(this),
-      function(outputs, next){
-        var numOK = 0;
-        var biggestNa = null;
-        var biggestN = null;
-        var biggestNaVa = null;
-        var biggestNaIa = null;
-        var IV = null;
-        var bailEarly = false;
-        outputs.forEach(function(data){
-          if (bailEarly)
-            return;
-          if (data.err){
-            next(data.err)
-            bailEarly = true;
-          } else {
-            var output = data.output;
-            //this._debug('resPrep', output);
-            if (output.IV != null)
-              IV = output.IV;
-            if (output.status === this.OK){
-              if (biggestNa == null || output.Na > biggestNa){
-                biggestNa = output.Na;
-                biggestNaIa = output.Ia;
-                biggestNaVa = output.Va;
-              }
-              numOK += 1;
-            } else {
-              if (
-                output.N != null &&
-                (biggestN == null || output.N > biggestN)
-              ){
-                biggestN = output.N;
-              }
-            }
-          }
-        }.bind(this));
-        if (bailEarly)
-          return;
-        if (biggestN != null){
-          this.N = biggestN;
-        }
-        if (IV != null){
-          if (request.value !== "nop")
-            this.requestHiPri(request.value, request.isValid);
-          request.value = IV;
-          request.isValid = function(){ return false; };
-          this._debug("iv", request);
-        }
-        else if (
-          biggestNaVa != null
-        ){
-          this.requestHiPri(request.value, request.isValid);
-          request.value = biggestNaVa;
-          I = biggestNaIa;
-          request.isValid = function(){ return false; };
-          this._debug("bnava", request);
-        }
-        if (numOK < this.numQuorum){
-          next('prepare failed, no quorum :(');
-        }
-        else {
-          next(null, N, request.value, I);
-        }
-      }.bind(this),
-      this._sendAccept.bind(this),
-      function(outputs, next){
-        var numOK = 0;
-        var biggestN = null;
-        var bailEarly = false;
-        outputs.forEach(function(data){
-          if (bailEarly)
-            return;
-          if (data.err){
-            next(data.err);
-            bailEarly = true;
-          } else {
-            var output = data.output;
-            if (output.status === this.OK){
-              numOK += 1;
-            } else {
-              if (
-                output.N != null &&
-                (biggestN == null || output.N > biggestN)
-              ){
-                biggestN = output.N;
-              }
-            }
-          }
-        }.bind(this));
-        if (bailEarly)
-          return;
-        if (biggestN != null){
-          this.N = biggestN;
-        }
-        if (numOK >= this.numQuorum){
-          next(null, request.value, I);
-        }
-        else {
-          next('accept failed, no quorum :(');
-        }
-      }.bind(this),
-      this._sendCommit.bind(this)
-    ], function(err){
-      if (err){
-        done(err);
-      } else {
-        done(null)
+
+  _processPrepare: function(request, N, I, outputs, next){
+    var err = this._datasHasError(outputs);
+    if (err){
+      next(err);
+      return;
+    }
+    var biggestN = this._datasBiggestN(outputs);
+    if (biggestN != null){
+      this.N = biggestN;
+    }
+    var biggestOutput = null;
+    var IV = null;
+    outputs.forEach(function(data){
+      var output = data.output;
+      if (output.IV != null)
+        IV = output.IV;
+      if (
+        output.status === this.OK && 
+        (biggestOutput == null || output.Na > biggestOutput.Na)
+      ){
+        biggestOutput = output;
       }
-    }, [N, I]);
+    }.bind(this));
+    if (IV != null){
+      if (request.value !== "nop")
+        this._requestHiPri(request.value, request.isValid);
+      request.value = IV;
+      request.isValid = function(){ return false; };
+      this._debug("iv", request);
+    } else if (
+      biggestOutput != null && 
+      biggestOutput.Va != null
+    ){
+      this._requestHiPri(request.value, request.isValid);
+      request.value = biggestOutput.Va;
+      I = biggestOutput.Ia;
+      request.isValid = function(){ return false; };
+      this._debug("bnava", request);
+    }
+    var numOK = this._datasNumOK(outputs);
+    if (numOK < this.numQuorum){
+      next('prepare failed, no quorum :(');
+    } else {
+      next(null, request, N, I);
+    }
   },
 
-  //=========== Helpers ===========
+  _processAccept: function(request, N, I, outputs, next){
+    var numOK = 0;
+    var biggestN = null;
+    var err = this._datasHasError(outputs);
+    if (err){
+      next(err);
+      return;
+    }
+    var biggestN = this._datasBiggestN(outputs);
+    if (biggestN != null){
+      this.N = biggestN;
+    }
+    var numOK = this._datasNumOK(outputs);
+    if (numOK >= this.numQuorum){
+      next(null, request.value, I);
+    } else {
+      next('accept failed, no quorum :(');
+    }
+  },
+
+  _datasBiggestN: function(datas){
+    var biggestN = null;
+    datas.forEach(function(data){
+      var output = data.output;
+      if (output.status !== this.OK) {
+        if (
+            output.N != null &&
+            (biggestN == null || output.N > biggestN)
+        ){
+          biggestN = output.N;
+        }
+      }
+    }.bind(this));
+    return biggestN;
+  },
+
+  _datasNumOK: function(datas){
+    var numOK = 0;
+    datas.forEach(function(data){
+      var output = data.output;
+      if (output.status === this.OK){
+        numOK += 1;
+      }
+    }.bind(this));
+    return numOK;
+  },
+
+  _datasHasError: function(datas){
+    for (var i = 0; i < datas.length; i++){
+      var data = datas[i];
+      if (data.err)
+        return data.err;
+    }
+    return null;
+  },
 
   _uidToColor: function(){
     var colors = [
@@ -293,7 +312,6 @@ Paxos.prototype = {
       "yellow",
     ];
     return colors[this.uid%colors.length];
-
   },
 
   _debug: function(){
@@ -313,11 +331,11 @@ Paxos.prototype = {
     }
   },
 
-  _sendPrepare: function(N, I, done){
+  _sendPrepare: function(request, N, I, done){
     this._debug('sendPrepare', N, I);
     var outputs = [];
     var count = Utils.count(this.numQuorum, function(){
-      done(null, outputs);
+      done(null, request, N, I, outputs);
     }.bind(this));
     this._broadcast('paxos.prepare', { N: N, I: I, uid: this.uid }, function(err, output){
       outputs.push({ err: err, output: output });
@@ -325,11 +343,12 @@ Paxos.prototype = {
     }.bind(this));
   },
   
-  _sendAccept: function(N, V, I, done){
+  _sendAccept: function(request, N, I, done){
+    var V = request.value;
     this._debug('sendAccept', N, V, I);
     var outputs = [];
     var count = Utils.count(this.numQuorum, function(){
-      done(null, outputs);
+      done(null, request, N, I, outputs);
     }.bind(this));
     this._broadcast('paxos.accept', { N: N, V: V, I: I, uid: this.uid }, function(err, output){
       outputs.push({ err: err, output: output });
@@ -378,7 +397,7 @@ Paxos.prototype = {
   _checkAndReq: function(I){
     if (this.oldestMissedI < I && !(I in this.commitLog)){
       this._debug('we need an i!', this.oldestMissedI, I);
-      this.requestHiPri('nop', function(){ 
+      this._requestHiPri('nop', function(){ 
         return !(I in this.commitLog);
       }.bind(this), this.oldestMissedI, false);
     }
@@ -396,12 +415,17 @@ Paxos.prototype = {
       uid: this.uid
     }
     if (
-      (I in this.commitLog && 
-      JSON.stringify(this.commitLog[I]) !== JSON.stringify(V)) ||
+      (
+        I in this.commitLog && 
+        (this.commitLog[I].seq !== V.seq ||
+         this.commitLog[I].uid !== V.uid)
+      ) ||
       V === 'nop' ||
-      (this.Ia === I &&
+      (
+        this.Ia === I &&
        (this.Va.uid !== V.uid ||
-        this.Va.seq !== V.seq))
+        this.Va.seq !== V.seq)
+      )
     ){
       res.status = this.CANCEL;
     }
@@ -434,20 +458,28 @@ Paxos.prototype = {
     }
     this.commitLog[I] = V;
     if (V === 'nop')
-      throw new Error('3');
+      throw new Error('commit got nop');
     while (this.commitLog[this.oldestMissedI] != null){
       V = this.commitLog[this.oldestMissedI];
       if (
         V.seq >= this.seqLogs[V.uid].oldestMissed && 
         !(V.seq in this.seqLogs[V.uid].log)
       ){
-        this.emit('commit', V.v);
+        this._processCommit(V, this.oldestMissedI);
       }
       this.seqLogs[V.uid].log[V.seq] = true;
       //increment oldestMissed
       this.oldestMissedI++;
     }
     done();
+  },
+
+  _extractUserData: function(V){
+    return V.v;
+  },
+
+  _processCommit: function(V){
+    this.emit('commit', this._extractUserData(V), V);
   },
 
   _broadcast: function(name, input, onOneRPCDone){
@@ -467,7 +499,6 @@ Paxos.prototype = {
 
     rpc.on('paxos.prepare', this._prepare.bind(this));
     rpc.on('paxos.accept', this._accept.bind(this));
-    //rpc.on('paxos.accepted', this._accepted.bind(this));
     rpc.on('paxos.commit', this._commit.bind(this));
   },
 }
