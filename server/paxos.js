@@ -17,7 +17,7 @@ function Paxos(uid, serverRPCPool){
 
   this._addServerRPC(this.rpc);
 
-  this.DEBUG = true;
+  this.DEBUG = false;
 
   this.commitLog = [];
   this.oldestMissedI = 0;
@@ -122,9 +122,8 @@ Paxos.prototype = {
     if (request == null){
       this.paxosInProgress = false;
       this.heartbeatTimeoutId = setTimeout(function(){
-        console.log('hb');
         var I = this.I()+1;
-        this.requestHiPri('nop', function(){ 
+        this.requestHiPri('nop', function(){
           return !(I in this.commitLog);
         }.bind(this), I, false);
       }.bind(this), 1000);
@@ -149,12 +148,8 @@ Paxos.prototype = {
         this.doPaxos(request, N, I, function(err){
           if (err){
             this._debug(err);
-            if (!request.retry && err === 'prepare failed, missed I, got I'){
-              this._debug('no retry', request);
-            } else {
-              this.requestQueue.unshift(request);
-              this._debug('retry', request);
-            }
+            this.requestQueue.unshift(request);
+            this._debug('retry', request);
             this.expBackoff *= 2+ -.5 + rng.nextFloat();
           } else {
             this.expBackoff = 5;
@@ -222,10 +217,6 @@ Paxos.prototype = {
           request.value = IV;
           request.isValid = function(){ return false; };
           this._debug("iv", request);
-          //this._commit({
-          //  V: IV,
-          //  I: request.I
-          //}, function(){ });
         }
         else if (
           biggestNaVa != null

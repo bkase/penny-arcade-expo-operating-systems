@@ -23,23 +23,25 @@ var tests = [
   [11, .8, testMultiSend.bind(null, 100)],
   [11, .8, testWhenShittyTakeTurns.bind(null, 100)],
 
-  [3, .8, testWhenShitty.bind(null, 1000)],
-  [3, .8, testMultiSend.bind(null, 1000)],
-  [3, .8, testWhenShittyTakeTurns.bind(null, 1000)],
-  [5, .8, testWhenShitty.bind(null, 1000)],
-  [5, .8, testMultiSend.bind(null, 1000)],
-  [5, .8, testWhenShittyTakeTurns.bind(null, 1000)],
-  [7, .8, testWhenShitty.bind(null, 1000)],
-  [7, .8, testMultiSend.bind(null, 1000)],
-  [7, .8, testWhenShittyTakeTurns.bind(null, 1000)],
-  [11, .9, testWhenShitty.bind(null, 1000)],
-  [11, .9, testMultiSend.bind(null, 1000)],
-  [11, .9, testWhenShittyTakeTurns.bind(null, 1000)],
+  //[3, .8, testWhenShitty.bind(null, 1000)],
+  //[3, .8, testMultiSend.bind(null, 1000)],
+  //[3, .8, testWhenShittyTakeTurns.bind(null, 1000)],
+  //[5, .8, testWhenShitty.bind(null, 1000)],
+  //[5, .8, testMultiSend.bind(null, 1000)],
+  //[5, .8, testWhenShittyTakeTurns.bind(null, 1000)],
+  //[7, .8, testWhenShitty.bind(null, 1000)],
+  //[7, .8, testMultiSend.bind(null, 1000)],
+  //[7, .8, testWhenShittyTakeTurns.bind(null, 1000)],
+  //[11, .9, testWhenShitty.bind(null, 1000)],
+  //[11, .9, testMultiSend.bind(null, 1000)],
+  //[11, .9, testWhenShittyTakeTurns.bind(null, 1000)],
 ];
 
+var t0 = Date.now();
 doTests(tests, function(err){
   if (err)
     throw err;
+  console.log(Date.now() - t0);
   process.exit(0);
 });
 
@@ -93,7 +95,7 @@ function testMultiSend(requests, paxoss, done){
   paxoss.forEach(function(paxos){
     is[paxos.uid] = 0;
     paxos.on('commit', function(v){
-      console.log(paxos.uid, v.d);
+      //console.log(paxos.uid, v.d);
       if (v.d in iToUID && iToUID[v.d] !== v.uid){
         bail = true;
         done(new Error('bad commit'));
@@ -103,7 +105,7 @@ function testMultiSend(requests, paxoss, done){
       is[paxos.uid] = v.d+1;
       if (!bail){
         paxos.request({ d: is[paxos.uid], uid: paxos.uid }, function(v){
-          console.log(v.v.d, paxos.uid, iToUID[v.v.d], is[paxos.uid], v)
+          //console.log(v.v.d, paxos.uid, iToUID[v.v.d], is[paxos.uid], v)
           return !(v.v.d in iToUID);
         });
       }
@@ -337,7 +339,7 @@ function testWhenShittyTakeTurns(requests, paxoss, done){
     });
     var commits = {};
     paxos.on('commit', function(v){
-      console.log(paxos.uid, 'got', 'commit', v)
+      //console.log(paxos.uid, 'got', 'commit', v)
       if (maxIByUID[paxos.uid] >= v.d){
         done(new Error('was less than!', paxos.uid, v.d, maxIByUID[paxos.uid]));
         bail = true;
@@ -377,7 +379,7 @@ function testWhenShitty(requests, paxoss, done){
     });
     var commits = {};
     paxos.on('commit', function(v){
-      console.log(paxos.uid, v.d);
+      //console.log(paxos.uid, v.d);
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
