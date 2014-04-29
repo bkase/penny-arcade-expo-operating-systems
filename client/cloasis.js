@@ -20,21 +20,31 @@
     hostport: 'ws://localhost:32200',
     loginUser: function(username, password, done, hostport){
       var conn = new Connection(new WebSocket(Cloasis.hostport));
+      var session = null;
       conn.on('open', function() {
-        var session = new Session(conn);
+        session = new Session(conn);
         session.loginUser(username, password, function(err){
           done(err, session);
         });
+      });
+      conn.on('close', function(){
+        if (session)
+          session.emit('close');
       });
     },
 
     registerUser: function(username, password, done, hostport){
       var conn = new Connection(new WebSocket(Cloasis.hostport));
+      var session = null;
       conn.on('open', function() {
-        var session = new Session(conn);
+        session = new Session(conn);
         session.registerUser(username, password, function(err){
           done(err, session);
         });
+      });
+      conn.on('close', function(){
+        if (session)
+          session.emit('close');
       });
     }
   }
@@ -44,6 +54,7 @@
   //======================
 
   function Session(conn){
+    Utils.makeEventable(this);
     this.conn = conn;
     this.fnTable = {};
     this.rpc = new RPC(this.conn);

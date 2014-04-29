@@ -38,8 +38,6 @@ APIs.prototype = {
     if (name === 'call'){
       var apiId = msg.apiId;
       var apiStr = Utils.stringifyAPIIdentifier(msg.apiId);
-      //if (this.uid === 0)
-      //  process.exit(1);
       if (apiStr in this.localRPCByAPIId){
         this.localRPCByAPIId[apiStr].call('call', msg.input, function(err, output){
           if (err)

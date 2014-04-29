@@ -2,21 +2,30 @@ var cloasis = require('./cloasis').Cloasis;
 
 var WebSocketServer = require('ws').Client;
 
-// cloasis.hostport = 'ws://localhost:32202'
-cloasis.registerUser('evan', 'arst', function(err, session){
-  if (err) {
-    console.log(err);
-    cloasis.loginUser('evan', 'arst', onLogin)
-  } else {
-    onLogin(err, session);
-  }
-});
+
+function connect(){
+  // cloasis.hostport = 'ws://localhost:32202'
+  cloasis.registerUser('evan', 'arst', function(err, session){
+    if (err) {
+      console.log(err);
+      session.loginUser('evan', 'arst', function(err){
+        if (err)
+          throw err;
+        onLogin(session);
+      })
+    } else {
+      onLogin(session);
+    }
+  });
+}
+
+connect();
 
 
-function onLogin(err, session) {
-  if (err){
-    throw err;
-  }
+function onLogin(session) {
+  session.on('close', function(){
+    connect();
+  });
 
   var isPrimeSpec = { 
     username: 'evan', 
@@ -72,11 +81,11 @@ function onLogin(err, session) {
           //    throw err;
           //  console.log(output);
           //});
-          session.call(apiId1, { n: 7 }, function(err, output){
-            if (err)
-              throw err;
-            console.log(output);
-          });
+          //session.call(apiId1, { n: 7 }, function(err, output){
+          //  if (err)
+          //    throw err;
+          //  console.log(output);
+          //});
         });
       });
     });
