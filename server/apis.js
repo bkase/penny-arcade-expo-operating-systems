@@ -19,9 +19,6 @@ APIs.prototype = {
       this._lazyAddUIDToAPIs(V.uid);
       this.apisByUID[V.uid][Utils.stringifyAPIIdentifier(V.api)] = V.api;
       this._lazyCallCallback(V)(null);
-      if (V.uid === this.uid){
-        
-      }
     } else {
       console.log('apis dropped', V);
     }
@@ -90,6 +87,7 @@ APIs.prototype = {
       if (V.uid === this.uid){
         if (V.cbId in this.cbById){
           this.cbById[V.cbId].apply(null, arguments);
+          delete this.cbById[V.cbId];
         } else {
           console.log(this.uid, 'dropped', V.cbId);
         }
