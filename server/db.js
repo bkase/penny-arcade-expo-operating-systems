@@ -260,20 +260,39 @@ DB.prototype = {
 
   registerAPIs: function(apiSpecs, done){
 
-    var cnt = Utils.count(apiSpecs.length, done);
+    var errs = []
+    var cnt = Utils.count(apiSpecs.length, function() {
+      if (errs.length > 0) {
+        done({ errs: errs });
+      } else {
+        done();
+      }
+    });
     for (var i = 0; i < apiSpecs.length; i++) {
       this._registerAPI(apiSpecs[i], function(err) {
         if (err) {
-          done(err);
-          return;
+          errs.push(err);
         }
         cnt.sub();
       });
     }
   },
 
-  searchAPIs: function(query, done){
+  searchAPIs: function(needle, done){
+    var specs = schema.apispecs;
+    var query = { text: "SELECT * FROM apispecs WHERE apispecs.namespace LIKE '%' || $1 || '%'", values: [ needle ] };
+    this._select(query, function(err, res) {
+      if (err) {
+        console.log(err);
+        done(err);
+        return;
+      }
+      var apiIds = res.rows.map(function(row) {
+        return { name: row.name, namespace: row.namespace, version: row.version };
+      });
 
+      done(null, apiIds);
+    }.bind(this))
   },
 
   infoAPIs: function(apiIds, done){

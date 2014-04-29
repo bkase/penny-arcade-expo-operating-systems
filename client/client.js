@@ -14,9 +14,7 @@ cloasis.registerUser('evan', 'arst', function(err, session){
 
 
 function onLogin(err, session) {
-    console.log(err);
   if (err){
-    console.log(err);
     throw err;
   }
 
@@ -55,22 +53,31 @@ function onLogin(err, session) {
   };
 
   session.register(isPrimeSpec, isNotPrimeSpec, function(err){
+    console.log("All registered");
     session.activate({ fn: isPrime, apiIdentifier: apiId1 }, function(err){
       if (err){
         console.log(err);
         throw err;
       }
-      session.info(apiId1, apiId2, function(err, output){
-        if (err){
-          console.log(err);
+      session.search("Prime", function(err, output){
+        if (err)
           throw err;
-        }
-        console.log(output);
-        //session.call(apiId1, { n: 7 }, function(err, output){
-        //  if (err)
-        //    throw err;
-        //  console.log(output);
-        //});
+        console.log("Searched for prime: ", output);
+        session.info(apiId1, apiId2, function(err, output){
+          if (err)
+            throw err;
+          console.log(output);
+          //session.call(apiId1, { n: 7 }, function(err, output){
+          //  if (err)
+          //    throw err;
+          //  console.log(output);
+          //});
+          session.call(apiId1, { n: 7 }, function(err, output){
+            if (err)
+              throw err;
+            console.log(output);
+          });
+        });
       });
     });
   });

@@ -169,6 +169,14 @@
     },
     stringifyAPIIdentifier: function(apiIdentifier){
       return apiIdentifier.namespace + '.' + apiIdentifier.name + '.' + apiIdentifier.version;
+    },
+    shield: function(fn) {
+      return function() {
+        if (!fn.__called) {
+          fn.__called = true;
+          fn.apply(null, arguments);
+        }
+      };
     }
   }
 
