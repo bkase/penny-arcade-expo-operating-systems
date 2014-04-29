@@ -13,7 +13,6 @@ var clientPortByUID = JSON.parse(process.argv[5]);
 var paxosIsRevive = Boolean(Number(process.argv[6]));
 var clientPort = clientPortByUID[paxosUID];
 
-var db = null;
 
 var nextConnId = 0;
 
@@ -46,6 +45,9 @@ function onCommit(V, done){
   done();
 }
 
+var db = null;
+var apis = null;
+
 function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
   Utils.whoami(function(whoiam){
@@ -70,9 +72,9 @@ function initClientRPC(paxos){
       rpc.on('register', register);
       rpc.on('info', info);
 
-      rpc.on('call', apis.call.bind(apis));
-      rpc.on('activate', apis.activate.bind(apis));
-      rpc.on('deactivate', apis.deactivate.bind(apis));
+      rpc.on('call', call);
+      rpc.on('activate', activate);
+      rpc.on('deactivate', deactivate);
     });
   });
 
@@ -81,6 +83,20 @@ function initClientRPC(paxos){
   }
 }
 
+function call(rpc, data, done){
+  //TODO check user logged in
+  apis.call(rpc, data, done);
+}
+
+function activate(rpc, data, done){
+  //TODO check user logged in + api registered + owned by user
+  apis.activate(rpc, data, done);
+}
+
+function deactivate(rpc, data, done){
+  //TODO check user logged in + api owned by user
+  apis.deactivate(rpc, data, done);
+}
 
 
 //==========================
