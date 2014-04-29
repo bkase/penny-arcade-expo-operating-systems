@@ -31,6 +31,7 @@ APIs.prototype = {
     } else {
       console.log('apis dropped paxos', V);
     }
+    done();
   },
 
   receiveMsg: function(name, msg, done){

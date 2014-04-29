@@ -42,8 +42,6 @@ function onCommit(V, done, old){
   } else {
     console.log('commit, dropped ', V);
   }
-
-  done();
 }
 
 function onDead(uid){

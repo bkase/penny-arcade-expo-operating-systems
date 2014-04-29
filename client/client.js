@@ -2,7 +2,7 @@ var cloasis = require('./cloasis').Cloasis;
 
 var WebSocketServer = require('ws').Client;
 
-cloasis.hostport = 'ws://localhost:32202'
+// cloasis.hostport = 'ws://localhost:32202'
 cloasis.registerUser('evan', 'arst', function(err, session){
   if (err) {
     console.log(err);

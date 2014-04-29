@@ -213,6 +213,7 @@ DB.prototype = {
             ], function (err) {
               if (err) {
                 console.log(err);
+                this.cb.lazyCallCallback(V)(err);
                 revert(finish, err);
                 return;
               }

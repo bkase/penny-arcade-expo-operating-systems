@@ -29,6 +29,7 @@
         name: name,
         input: input
       }));
+
       setTimeout(function(){
         if (!this.gotCallByRequestId[requestId]){
           this.gotCallByRequestId[requestId] = true;
@@ -47,7 +48,7 @@
           this.fnTable[id](null, json.input);
           delete this.fnTable[id];
         } else {
-          console.log('cb not in table!');
+          console.log('cb not in table!', json);
           //throw new Error('cb not in table!');
         }
       } else {
