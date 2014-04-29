@@ -3,6 +3,7 @@ var doTests = require('./paxosTestUtils').doTests;
 
 var tests = [
   [3, 1, testNodeFailure],
+  [3, 1, testMultiNodeFailure],
   [3, 1, testConnFailure],
   [5, 1, testNodeFailureChain],
   [7, 1, testNodeFailureChain],
@@ -76,6 +77,39 @@ function testNodeFailure(paxoss, done){
       done(new Error('timed out'));
     isDone = true;
   }, 3000);
+  paxoss[1].stop();
+  paxoss[0].request('someval', function(done){ done(true); });
+}
+
+function testMultiNodeFailure(paxoss, done){
+  var recoverCount = 0;
+  var timesToFail = 3;
+  var isDone = false;
+  paxoss.forEach(function(paxos){
+    paxos.on('recovered', function(uid){
+      recoverCount += 1;
+      if (recoverCount %2 === 0){
+        if (recoverCount/2 == timesToFail){
+          paxoss[1].on('commit', function(v, commitDone){
+            if (!isDone)
+              done(null);
+            isDone = true;
+            commitDone();
+          });
+        }
+        else {
+          paxoss[1].on('commit', function(v, commitDone){
+            paxoss[1].stop();
+          });
+        }
+      }
+    });
+  });
+  setTimeout(function(){
+    if (!isDone)
+      done(new Error('timed out'));
+    isDone = true;
+  }, 3000*timesToFail);
   paxoss[1].stop();
   paxoss[0].request('someval', function(done){ done(true); });
 }

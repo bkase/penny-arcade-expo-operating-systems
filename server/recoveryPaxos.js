@@ -16,25 +16,7 @@ function RecoveryPaxos(){
   this.beingRevived = {};
 
   this.serverRPCPool.forEach(function(rpc){
-    rpc.on('close', function(){
-      var numConn = 1;
-      for (var i = 0; i < this.serverRPCPool.length; i++){
-        if (!this.serverRPCPool[i].conn.closed)
-          numConn += 1;
-      }
-      if (numConn < this.numQuorum){
-        this.stop();
-      }
-      this._sendDeadUID(rpc.targetName);
-      delete this.beingRevived[rpc.targetName];
-      if (rpc.targetName in this.revivingByUID){
-        this.revivingByUID[rpc.targetName].forEach(this._sendDeadUID.bind(this));
-        this.revivingByUID[rpc.targetName].forEach(function(beingRevivedUID){
-          delete this.beingRevived[beingRevivedUID];
-        }.bind(this));
-        this.revivingByUID[rpc.targetName] = [];
-      }
-    }.bind(this));
+    rpc.on('close', this.processClose.bind(this, rpc));
   }.bind(this));
   
   this.toSend = [];
@@ -47,6 +29,31 @@ RecoveryPaxos.setRNGSeed = function(seed){
 RecoveryPaxos.prototype = Object.create(Paxos.prototype);
 RecoveryPaxos.prototype.constructor = RecoveryPaxos;
 
+RecoveryPaxos.prototype.processClose = function(rpc){
+  var numConn = 1;
+  for (var i = 0; i < this.serverRPCPool.length; i++){
+    if (!this.serverRPCPool[i].conn.closed)
+      numConn += 1;
+  }
+  if (numConn < this.numQuorum){
+    this.stop();
+  }
+  this._sendDeadUID(rpc.targetName);
+  delete this.beingRevived[rpc.targetName];
+  if (rpc.targetName in this.revivingByUID){
+    this.revivingByUID[rpc.targetName].forEach(this._sendDeadUID.bind(this));
+    this.revivingByUID[rpc.targetName].forEach(function(beingRevivedUID){
+      delete this.beingRevived[beingRevivedUID];
+    }.bind(this));
+    this.revivingByUID[rpc.targetName] = [];
+  }
+}
+
+RecoveryPaxos.prototype.setRPC = function(uid, rpc){
+  rpc.on('close', this.processClose.bind(this, rpc));
+  return Paxos.prototype.setRPC.apply(this, arguments);
+}
+
 RecoveryPaxos.prototype.request = function(v, isValid, Iopt, retryOpt, isHiPri){
   arguments[0] = {
     userMsg: v,
@@ -55,7 +62,7 @@ RecoveryPaxos.prototype.request = function(v, isValid, Iopt, retryOpt, isHiPri){
   if (this.maxIgnoreI != null && this.I() <= this.maxIgnoreI){
     this.toSend.push(arguments);
   } else {
-    Paxos.prototype.request.apply(this, arguments);
+    return Paxos.prototype.request.apply(this, arguments);
   }
 }
 RecoveryPaxos.prototype._processCommit = function(done, V, I){
