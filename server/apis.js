@@ -1,4 +1,5 @@
 var Utils = require('../common/utils').Utils;
+var CB = require('../common/cb').CB;
 
 function APIs(uid){
   Utils.makeEventable(this);
@@ -6,9 +7,7 @@ function APIs(uid){
   this.activeAPIs = {};
   this.activeAPIsByConnId = {};
   this.uid = uid;
-
-  this.nextCbId = 0;
-  this.cbById = {};
+  this.cb = new CB(this.uid);
 }
 
 APIs.prototype = {
@@ -18,7 +17,7 @@ APIs.prototype = {
       this.activeAPIs[Utils.stringifyAPIIdentifier(V.api)] = true;
       this._lazyAddUIDToAPIs(V.uid);
       this.apisByUID[V.uid][Utils.stringifyAPIIdentifier(V.api)] = V.api;
-      this._lazyCallCallback(V)(null);
+      this.cb.lazyCallCallback(V)(null);
     } else {
       console.log('apis dropped', V);
     }
@@ -82,24 +81,6 @@ APIs.prototype = {
   //  HELPERS
   //=================
 
-  _lazyCallCallback: function(V){
-    return function(){
-      if (V.uid === this.uid){
-        if (V.cbId in this.cbById){
-          this.cbById[V.cbId].apply(null, arguments);
-          delete this.cbById[V.cbId];
-        } else {
-          console.log(this.uid, 'dropped', V.cbId);
-        }
-      }
-    }.bind(this);
-  },
-
-  _addCallback: function(V, done){
-    V.cbId = this.nextCbId++;
-    this.cbById[V.cbId] = done;
-  },
-
   _lazyAddUIDToAPIs: function(uid){
     if (!(uid in this.apisByUID)){
       this.apisByUID[uid] = {}
@@ -112,11 +93,11 @@ APIs.prototype = {
       uid: this.uid,
       api: api
     };
-    this._addCallback(V, done);
+    this.cb.addCallback(V, done);
     this.emit('request', V, function(done){
       var valid = !(Utils.stringifyAPIIdentifier(api) in this.activeAPIs);
       if (!valid){
-        this._lazyCallCallback(V)('api activated');
+        this.cb.lazyCallCallback(V)('api activated');
       }
       done(valid);
     }.bind(this));
