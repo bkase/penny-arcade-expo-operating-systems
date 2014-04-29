@@ -107,13 +107,11 @@ DB.prototype = {
                   if (err) {
                     isValidDone(false);
                     this.cb.lazyCallCallback(V)('error querying username');
-                    console.log(err);
                     return;
                   }
 
                   if (exists) {
                     isValidDone(false);
-                    console.log("Username exists");
                     this.cb.lazyCallCallback(V)(null, true);
                     return;
                   }

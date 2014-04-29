@@ -2,8 +2,10 @@ var cloasis = require('./cloasis').Cloasis;
 
 var WebSocketServer = require('ws').Client;
 
+cloasis.hostport = 'ws://localhost:32202'
 cloasis.registerUser('evan', 'arst', function(err, session){
   if (err) {
+    console.log(err);
     cloasis.loginUser('evan', 'arst', onLogin)
   } else {
     onLogin(err, session);
@@ -12,6 +14,7 @@ cloasis.registerUser('evan', 'arst', function(err, session){
 
 
 function onLogin(err, session) {
+    console.log(err);
   if (err) throw err;
 
   var isPrimeSpec = { 

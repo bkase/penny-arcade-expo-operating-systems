@@ -23,6 +23,9 @@ CB.prototype = {
   },
 
   addCallback: function(V, done){
+    if (V.uid == null)
+      V.uid = this.uid;
+
     V.cbId = this.nextCbId++;
     this.cbById[V.cbId] = done;
   },

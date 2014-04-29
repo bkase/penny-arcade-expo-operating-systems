@@ -61,7 +61,7 @@ function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
   Utils.whoami(function(whoiam){
     var conString = 'postgres://' + whoiam + '@localhost/cloasis' + paxos.uid;
-    db = new DB(conString);
+    db = new DB(conString, paxosUID);
     apis = new APIs(paxosUID);
 
     apis.on('request', function(V, isValid){
