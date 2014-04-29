@@ -70,7 +70,7 @@ RecoveryPaxos.prototype._processCommit = function(done, V, I){
   }
   if ('userMsg' in V.v){
     if (this.ison('commit'))
-      this.emit('commit', V.v.userMsg, done);
+      this.emit('commit', V.v.userMsg, done, this.maxIgnoreI != null && I <= this.maxIgnoreI);
     else
       done();
   } else if (this.maxIgnoreI == null || I > this.maxIgnoreI) {
@@ -78,6 +78,7 @@ RecoveryPaxos.prototype._processCommit = function(done, V, I){
     if (V.v.type === 'dead'){
       if (this.RECO_DEBUG)
         console.log('dead', this.uid, V.v);
+      this.emit('dead', V.v.deadUID);
       this.deadTable[V.v.deadUID] = true;
       this._killConnectionsTo(V.v.deadUID);
       this._sendReviveUID(V.v.deadUID);
@@ -118,7 +119,7 @@ RecoveryPaxos.prototype._processCommit = function(done, V, I){
       }.bind(this));
     } else {
       if (this.RECO_DEBUG)
-        console.log('dropped type', V.v.type);
+        console.log('rc, dropped type', V.v.type);
     }
     done();
   }

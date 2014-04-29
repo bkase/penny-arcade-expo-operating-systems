@@ -16,7 +16,7 @@ CB.prototype = {
           this.cbById[V.cbId].apply(null, arguments);
           delete this.cbById[V.cbId];
         } else {
-          console.log(this.uid, 'dropped', V.cbId);
+          console.log(this.uid, 'cb dropped', V.cbId);
         }
       }
     }.bind(this);

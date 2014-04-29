@@ -24,7 +24,7 @@ DB.prototype = {
         this._doRegisterAPI(V, V.apiSpec);
         break;
       default:
-        console.log('dropped ', V);
+        console.log('db, dropped ', V);
     }
     done();
   },

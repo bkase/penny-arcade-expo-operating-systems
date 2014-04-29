@@ -502,7 +502,7 @@ Paxos.prototype = {
           this.seqLogs[V.uid].log[V.seq] = true;
           var oldestMissedI = this.oldestMissedI;
           this.oldestMissedI++;
-          this._processCommit(loop.bind(this), V, oldestMissedI);
+          this._processCommit(loop.bind(this), JSON.parse(JSON.stringify(V)), oldestMissedI);
         } else {
           this.seqLogs[V.uid].log[V.seq] = true;
           this.oldestMissedI++;

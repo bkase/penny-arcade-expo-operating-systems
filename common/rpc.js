@@ -51,7 +51,7 @@
           //throw new Error('cb not in table!');
         }
       } else {
-        var args =[
+        var args = [
           json.name, 
           json.input, 
           function(output){

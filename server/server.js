@@ -28,21 +28,26 @@ ServerPaxos.init(
     console.log('init', paxos.uid);
     paxos.on('commit', onCommit);
     paxos.on('receiveMsg', onReceiveMsg);
+    paxos.on('dead', onDead);
     initClientRPC(paxos);
   });
 
-function onCommit(V, done){
+function onCommit(V, done, old){
   if (V.name.indexOf('db::') === 0){
     V.name = V.name.slice(4);
-    db.commit(V, done);
+    db.commit(V, done, old);
   } else if (V.name.indexOf('apis::') == 0){
     V.name = V.name.slice(6);
-    apis.commit(V, done);
+    apis.commit(V, done, old);
   } else {
-    console.log('dropped ' + V);
+    console.log('commit, dropped ', V);
   }
 
   done();
+}
+
+function onDead(uid){
+  apis.died(uid);
 }
 
 function onReceiveMsg(name, msg, done){
@@ -50,7 +55,7 @@ function onReceiveMsg(name, msg, done){
     name = name.slice(6);
     apis.receiveMsg(name, msg, done);
   } else {
-    console.log('dropped ' + V);
+    console.log('rm, dropped ' + V);
   }
 }
 

@@ -15,7 +15,10 @@ cloasis.registerUser('evan', 'arst', function(err, session){
 
 function onLogin(err, session) {
     console.log(err);
-  if (err) throw err;
+  if (err){
+    console.log(err);
+    throw err;
+  }
 
   var isPrimeSpec = { 
     username: 'evan', 
@@ -53,17 +56,21 @@ function onLogin(err, session) {
 
   session.register(isPrimeSpec, isNotPrimeSpec, function(err){
     session.activate({ fn: isPrime, apiIdentifier: apiId1 }, function(err){
-      if (err)
+      if (err){
+        console.log(err);
         throw err;
+      }
       session.info(apiId1, apiId2, function(err, output){
-        if (err)
+        if (err){
+          console.log(err);
           throw err;
+        }
         console.log(output);
-        session.call(apiId1, { n: 7 }, function(err, output){
-          if (err)
-            throw err;
-          console.log(output);
-        });
+        //session.call(apiId1, { n: 7 }, function(err, output){
+        //  if (err)
+        //    throw err;
+        //  console.log(output);
+        //});
       });
     });
   });
