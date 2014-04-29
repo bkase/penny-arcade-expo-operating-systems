@@ -20,6 +20,9 @@ DB.prototype = {
       case 'createUser': 
         this._doCreateUser(V, V.username, V.passhash);
         break;
+      case 'registerAPI':
+        this._doRegisterAPI(V, V.apiSpec);
+        break;
       default:
         console.log('dropped ', V);
     }
@@ -169,46 +172,17 @@ DB.prototype = {
     });
   },
 
-  registerAPIs: function(apiSpecs, done){
-    //return done(null);
-
-    var apiSpec = apiSpecs[0];
+  _doRegisterAPI: function(V, apiSpec) {
     pg.connect(this.conString, function(err, client, freeClient) {
       // TODO: make sure no DUPEs in specs
       if (err) {
-        done(err);
+        console.log("ERROR: didn't register the API successfully");
         return;
       }
 
-
-      this.transaction(client, this.freeAndDone(freeClient, done), function(revert, finish) {
+      this.transaction(client, this.freeAndDone(freeClient, function(){}), function(revert, finish) {
         return function() {
-          (function loop(apiSpecs, finish) {
-            if (apiSpecs.length == 0) {
-              return finish(null);
-            }
-
-            var apiSpec = apiSpecs.shift();
-
-            if (apiSpec.namespace.indexOf(apiSpec.username) != 0) {
-              return finish({ err: "namespace must start with username" });
-            }
-
             Utils.waterfall([
-              function(next) {
-                var specs = schema.apispecs;
-                var query = specs.select(specs.star()).from(specs).where(specs.username.equals(apiSpec.username)).and(specs.namespace.equals(apiSpec.namespace)).toQuery();
-                client.query(query.text, query.values, next);
-              },
-
-              function(results, next) {
-                if (results.rows.length > 0) {
-                  next({ err: "api exists with that namespace" });
-                } else {
-                  next(null);
-                }
-              },
-
               function(next) {
                 var str = JSON.stringify(apiSpec.inputSpec);
                 client.query("INSERT INTO spectypes (json) VALUES ($1) RETURNING id", [str], next);
@@ -238,22 +212,65 @@ DB.prototype = {
 
                 client.query(query.text, query.values, next);
               },
-            ], function done(err) {
+            ], function (err) {
               if (err) {
                 console.log(err);
                 revert(finish, err);
                 return;
               }
-
-              loop(apiSpecs, finish);
-            });
-          }.bind(this))(
-              apiSpecs,
-              finish
-            );
-        }.bind(this);
+              
+              finish();
+              this.cb.lazyCallCallback(V)(null);
+            }.bind(this));
+          }.bind(this);
       }.bind(this));
     }.bind(this));
+  },
+
+  _registerAPI: function(apiSpec, done) {
+    var V = { name: 'registerAPI', 
+              apiSpec: apiSpec };
+    this.cb.addCallback(V, done);
+    this.emit('request', V, 
+              function isValid(isValidDone, v) { 
+                // TODO: do this in one query
+                if (apiSpec.namespace.indexOf(apiSpec.username) != 0) {
+                  return this.cb.lazyCallCallback(V)({ err: "namespace must start with username" });
+                }
+                var specs = schema.apispecs;
+                var query = specs.select(specs.star()).from(specs).where(specs.username.equals(apiSpec.username)).and(specs.namespace.equals(apiSpec.namespace)).toQuery();
+                this._selectNonEmpty(query, function(err, exists) {
+                  if (err) {
+                    isValidDone(false);
+                    this.cb.lazyCallCallback(V)({ err: 'error querying for apis' });
+                    console.log(err);
+                    return;
+                  }
+
+                  if (exists) {
+                    isValidDone(false);
+                    this.cb.lazyCallCallback(V)({ err: "api exists with that namespace" });
+                    return;
+                  }
+
+                  isValidDone(true);
+                }.bind(this));
+
+              }.bind(this));
+  },
+
+  registerAPIs: function(apiSpecs, done){
+
+    var cnt = Utils.count(apiSpecs.length, done);
+    for (var i = 0; i < apiSpecs.length; i++) {
+      this._registerAPI(apiSpecs[i], function(err) {
+        if (err) {
+          done(err);
+          return;
+        }
+        cnt.sub();
+      });
+    }
   },
 
   searchAPIs: function(query, done){
