@@ -13,6 +13,7 @@ function RecoveryPaxos(){
   this.deadTable = {};
 
   this.revivingByUID = {};
+  this.beingRevived = {};
 
   this.serverRPCPool.forEach(function(rpc){
     rpc.on('close', function(){
@@ -25,8 +26,12 @@ function RecoveryPaxos(){
         this.stop();
       }
       this._sendDeadUID(rpc.targetName);
+      delete this.beingRevived[rpc.targetName];
       if (rpc.targetName in this.revivingByUID){
-        this.revivingByUID.forEach(this._sendDeadUID.bind(this));
+        this.revivingByUID[rpc.targetName].forEach(this._sendDeadUID.bind(this));
+        this.revivingByUID[rpc.targetName].forEach(function(beingRevivedUID){
+          delete this.beingRevived[beingRevivedUID];
+        }.bind(this));
         this.revivingByUID[rpc.targetName] = [];
       }
     }.bind(this));
@@ -42,23 +47,31 @@ RecoveryPaxos.prototype.request = function(v, isValid, Iopt, retryOpt, isHiPri){
   }
   Paxos.prototype.request.apply(this, arguments);
 }
-
-RecoveryPaxos.prototype._processCommit = function(V, I){
+RecoveryPaxos.prototype._processCommit = function(done, V, I){
   if ('userMsg' in V.v){
-    this.emit('commit', V.v.userMsg);
+    if (this.ison('commit'))
+      this.emit('commit', V.v.userMsg, done);
+    else
+      done();
   } else if (this.maxIgnoreI == null || I > this.maxIgnoreI) {
     this.emit('recoveryCommit', V.v);
     if (V.v.type === 'dead'){
+      if (this.RECO_DEBUG)
+        console.log('dead', this.uid, V.v);
       this.deadTable[V.v.deadUID] = true;
       this._killConnectionsTo(V.v.deadUID);
       this._sendReviveUID(V.v.deadUID);
     } else if (V.v.type === 'revive'){
-      if (!(V.v.deadUID in this.revivingByUID)){
-        this.revivingByUID[V.v.deadUID] = [];
+      if (this.RECO_DEBUG)
+        console.log('revive', this.uid, V.v);
+      if (!(V.v.reviverUID in this.revivingByUID)){
+        this.revivingByUID[V.v.reviverUID] = [];
       }
-      this.revivingByUID[V.v.deadUID].push(V.v.reviverUID);
+      this.revivingByUID[V.v.reviverUID].push(V.v.deadUID);
+      this.beingRevived[V.v.deadUID] = true;
       delete this.deadTable[V.v.deadUID];
       if (V.v.reviverUID === this.uid){
+        this.emit('reviving', V.v.deadUID);
         this.revive(this.numServers, V.v.deadUID, function(err, hostport){
           if (err){
             //TODO
@@ -68,11 +81,14 @@ RecoveryPaxos.prototype._processCommit = function(V, I){
         }.bind(this));
       }
     } else if (V.v.type === 'reconnect'){
+      if (this.RECO_DEBUG)
+        console.log('reconnect', V.v);
       if (this.reviverUID in this.revivingByUID){
         var rbu = this.revivingByUID[this.reviverUID];
         var revivedIdx = rbu.indexOf(V.v.revivedUID);
         rbu.splice(revivedIdx, 1);
       }
+      delete this.beingRevived[V.v.deadUID];
       this.connect(this, I, V.v.hostport, V.v.revivedUID, function(err){
           if (err){
             //TODO if can't reconnect, timeout, send deaduid again
@@ -80,12 +96,11 @@ RecoveryPaxos.prototype._processCommit = function(V, I){
           }
           this.emit('recovered', V.v.revivedUID);
       }.bind(this));
-      if (this.RECO_DEBUG)
-        console.log('reconnect', V.v);
     } else {
       if (this.RECO_DEBUG)
         console.log('dropped type', V.v.type);
     }
+    done();
   }
 }
 
@@ -105,8 +120,8 @@ RecoveryPaxos.prototype._sendReconnectUID = function(revivedUID, hostport){
       hostport: hostport,
       reviverUID: this.uid,
     },
-    function (v, V){
-      return true;
+    function (done, v, V){
+      done(true);
     }.bind(this)
   ]);
 }
@@ -118,8 +133,8 @@ RecoveryPaxos.prototype._sendReviveUID = function(deadUID){
       deadUID: deadUID,
       reviverUID: this.uid
     },
-    function (v, V){
-      return V.v.deadUID in this.deadTable;
+    function (done, v, V){
+      done(V.v.deadUID in this.deadTable);
     }.bind(this)
   ]);
 }
@@ -130,8 +145,9 @@ RecoveryPaxos.prototype._sendDeadUID = function(deadUID){
       type: 'dead',
       deadUID: deadUID,
     },
-    function (v, V){
-      return !(V.v.deadUID in this.deadTable);
+    function (done, v, V){
+      done(!(V.v.deadUID in this.deadTable) &&
+           !(V.v.deadUID in this.beingRevived));
     }.bind(this)
   ]);
 }

@@ -4,11 +4,14 @@ var doTests = require('./paxosTestUtils').doTests;
 var tests = [
   [3, 1, testNodeFailure],
   [3, 1, testConnFailure],
+  [5, 1, testNodeFailureChain],
   [7, 1, testNodeFailureChain],
-]; 
-//var tests = 
-    x = [
+  [9, 1, testNodeFailureChain],
+  [11, 1, testNodeFailureChain],
+  [13, 1, testNodeFailureChain],
+
   [3, 1, testHeartbeat],
+
   [3, 1, testWhenLeaderDies2],
   [3, 1, testWhenAcceptFails],
   [3, 1, testWhenAcceptFails2],
@@ -51,49 +54,18 @@ doTests(tests, function(err){
   process.exit(0);
 });
 
-function testConnFailure(paxoss, done){
-  var isDone = false;
-  var recoverCount = 0;
-  paxoss.forEach(function(paxos){
-    paxos.on('recovered', function(uid){
-      recoverCount++;
-      if (recoverCount == 2){
-        paxoss[uid].on('commit', function(v){
-          if (!isDone)
-            done(null);
-          isDone = true;
-        });
-      }
-    });
-  });
-  setTimeout(function(){
-    if (!isDone)
-      done(new Error('timed out'));
-    isDone = true;
-  }, 10000);
-  paxoss[1].serverRPCPool[0].conn.close();
-  paxoss[2].request('someval', function(){ return true; });
-}
-function testNodeFailureChain(paxoss, done){
-
-}
-
 function testNodeFailure(paxoss, done){
-  var r0 = false;
-  var r2 = false;
+  var recoverCount = 0;
   var isDone = false;
   paxoss.forEach(function(paxos){
     paxos.on('recovered', function(uid){
-      if (paxos.uid === 0){
-        r0 = true;
-      } else if (paxos.uid === 2){
-        r2 = true;
-      }
-      if (r0 && r2){
-        paxoss[1].on('commit', function(v){
+      recoverCount += 1;
+      if (recoverCount == 2){
+        paxoss[1].on('commit', function(v, commitDone){
           if (!isDone)
             done(null);
           isDone = true;
+          commitDone();
         });
       }
     });
@@ -104,14 +76,69 @@ function testNodeFailure(paxoss, done){
     isDone = true;
   }, 3000);
   paxoss[1].stop();
-  paxoss[0].request('someval', function(){ return true; });
+  paxoss[0].request('someval', function(done){ done(true); });
+}
+
+function testConnFailure(paxoss, done){
+  var isDone = false;
+  var recoverCount = 0;
+  paxoss.forEach(function(paxos){
+    paxos.on('recovered', function(uid){
+      recoverCount++;
+      if (recoverCount == 2){
+        paxoss[uid].on('commit', function(v, commitDone){
+          if (!isDone)
+            done(null);
+          isDone = true;
+          commitDone();
+        });
+      }
+    });
+  });
+  setTimeout(function(){
+    if (!isDone)
+      done(new Error('timed out'));
+    isDone = true;
+  }, 4000);
+  paxoss[1].serverRPCPool[0].conn.close();
+  paxoss[2].request('someval', function(done){ done(true); });
+}
+
+function testNodeFailureChain(paxoss, done){
+  var isDone = false;
+  var recoverCount = 0;
+  var killed = 1;
+  var numRecovered = 0;
+  var N = paxoss.length;
+  paxoss.forEach(function(paxos){
+    paxos.on('reviving', function(uid){
+      if (killed < Math.floor(N/2)){
+        killed += 1;
+        paxos.stop();
+      }
+    });
+    paxos.on('recovered', function(uid){
+      numRecovered += 1;
+      if (numRecovered == killed*(N-killed)){
+        if (!isDone)
+          done(null);
+        isDone = true;
+      }
+    });
+  });
+  setTimeout(function(){
+    if (!isDone)
+      done(new Error('timed out'));
+    isDone = true;
+  }, 5000);
+  paxoss[1].serverRPCPool[0].conn.close();
 }
 
 function testHeartbeat(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -127,7 +154,7 @@ function testHeartbeat(paxoss, done){
           if (rpc.targetName == 2)
             rpc.conn.dropAll();
         });
-        paxoss[0].request({ d: '1' }, function(){ return true; });
+        paxoss[0].request({ d: '1' }, function(done){ done(true); });
       }
       if (paxos.uid === 0 && v.d === '1' && !bail){
         paxoss[0].serverRPCPool.forEach(function(rpc){
@@ -143,10 +170,11 @@ function testHeartbeat(paxoss, done){
         done(null);
         return;
       }
+      commitDone();
     });
   });
   if (!bail)
-    paxoss[0].request({ d: '0' }, function(){ return true; });
+    paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testMultiSend(requests, paxoss, done){
@@ -156,7 +184,7 @@ function testMultiSend(requests, paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     is[paxos.uid] = 0;
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       //console.log(paxos.uid, v.d);
       if (v.d in iToUID && iToUID[v.d] !== v.uid){
         bail = true;
@@ -166,15 +194,16 @@ function testMultiSend(requests, paxoss, done){
       iToUID[v.d] = v.uid;
       is[paxos.uid] = v.d+1;
       if (!bail){
-        paxos.request({ d: is[paxos.uid], uid: paxos.uid }, function(v){
+        paxos.request({ d: is[paxos.uid], uid: paxos.uid }, function(done, v){
           //console.log(v.v.d, paxos.uid, iToUID[v.v.d], is[paxos.uid], v)
-          return !(v.d in iToUID);
+          return done(!(v.d in iToUID));
         });
       }
       if (is[paxos.uid] > requests){
         bail = true;
         done(null);
       }
+      commitDone();
     });
   });
   paxoss[0].once('sendAccept', function(){
@@ -183,9 +212,9 @@ function testMultiSend(requests, paxoss, done){
         rpc.conn.dropAll();
     });
   });
-  paxoss[0].request({ d: is[0], uid: 0 }, function(v){ return !(v.d in iToUID); });
-  paxoss[1].request({ d: is[1], uid: 1 }, function(v){ return !(v.d in iToUID); });
-  paxoss[2].request({ d: is[2], uid: 2 }, function(v){ return !(v.d in iToUID); });
+  paxoss[0].request({ d: is[0], uid: 0 }, function(done, v){ done(!(v.d in iToUID)); });
+  paxoss[1].request({ d: is[1], uid: 1 }, function(done, v){ done(!(v.d in iToUID)); });
+  paxoss[2].request({ d: is[2], uid: 2 }, function(done, v){ done(!(v.d in iToUID)); });
 }
 
 function testWhenAcceptFails2(paxoss, done){
@@ -193,7 +222,7 @@ function testWhenAcceptFails2(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -210,9 +239,10 @@ function testWhenAcceptFails2(paxoss, done){
             rpc.conn.dropNone();
         });
         if (!bail)
-          paxoss[0].request({ d: '1' }, function(){ return true; });
+          paxoss[0].request({ d: '1' }, function(done){ done(true); });
         send = false;
       }
+      commitDone();
     });
   });
   paxoss[0].once('sendAccept', function(){
@@ -221,14 +251,14 @@ function testWhenAcceptFails2(paxoss, done){
         rpc.conn.dropAll();
     });
   });
-  paxoss[0].request({ d: '0' }, function(){ return true; });
+  paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testWhenAcceptFails(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -238,6 +268,7 @@ function testWhenAcceptFails(paxoss, done){
       if (v.d === '0'){
         done(null);
       }
+      commitDone();
     });
   });
   paxoss[0].once('sendAccept', function(){
@@ -261,14 +292,14 @@ function testWhenAcceptFails(paxoss, done){
     });
   });
   if (!bail)
-    paxoss[0].request({ d: '0' }, function(){ return true; });
+    paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testWhenLeaderDies2(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -278,6 +309,7 @@ function testWhenLeaderDies2(paxoss, done){
       if (v.d === '1'){
         done(null);
       }
+      commitDone();
     });
   });
   paxoss[0].on('sendAccept', function(){
@@ -292,17 +324,17 @@ function testWhenLeaderDies2(paxoss, done){
         rpc.conn.dropAll();
     });
     if (!bail)
-      paxoss[1].request({ d: '1' }, function(){ return true; });
+      paxoss[1].request({ d: '1' }, function(done){ done(true); });
   });
   if (!bail)
-    paxoss[0].request({ d: '0' }, function(){ return true; });
+    paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testWhenLeaderDies1(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -312,6 +344,7 @@ function testWhenLeaderDies1(paxoss, done){
       if (v.d === '1'){
         done(null);
       }
+      commitDone();
     });
   });
   paxoss[0].on('sendAccept', function(){
@@ -325,17 +358,17 @@ function testWhenLeaderDies1(paxoss, done){
       rpc.conn.dropAll();
     });
     if (!bail)
-      paxoss[1].request({ d: '1' }, function(){ return true; });
+      paxoss[1].request({ d: '1' }, function(done){ done(true); });
   });
   if (!bail)
-    paxoss[0].request({ d: '0' }, function(){ return true; });
+    paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testWhenLeaderDies0(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -345,6 +378,7 @@ function testWhenLeaderDies0(paxoss, done){
       if (v.d === '1'){
         done(null);
       }
+      commitDone();
     });
   });
   paxoss[0].on('sendAccept', function(){
@@ -359,17 +393,17 @@ function testWhenLeaderDies0(paxoss, done){
       rpc.conn.dropAll();
     });
     if (!bail)
-      paxoss[1].request({ d: '1' }, function(){ return true; });
+      paxoss[1].request({ d: '1' }, function(done){ done(true); });
   });
   if (!bail)
-    paxoss[0].request({ d: '0' }, function(){ return true; });
+    paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testWhenNonLeaderDies(paxoss, done){
   var bail = false;
   paxoss.forEach(function(paxos){
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
         done(err);
@@ -379,13 +413,14 @@ function testWhenNonLeaderDies(paxoss, done){
       if (paxos.uid == 0 && v.d === '0'){
         paxos.serverRPCPool[0].conn.dropAll();
         if (!bail)
-          paxos.request({ d: '1' }, function(){ return true; });
+          paxos.request({ d: '1' }, function(done){ done(true); });
       } else if (v.d === '1'){
         done(null);
       }
+      commitDone();
     });
   });
-  paxoss[0].request({ d: '0' }, function(){ return true; });
+  paxoss[0].request({ d: '0' }, function(done){ done(true); });
 }
 
 function testWhenShittyTakeTurns(requests, paxoss, done){
@@ -400,7 +435,7 @@ function testWhenShittyTakeTurns(requests, paxoss, done){
       rpc.conn.startBeingShitty();
     });
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       //console.log(paxos.uid, 'got', 'commit', v)
       if (maxIByUID[paxos.uid] >= v.d){
         done(new Error('was less than!', paxos.uid, v.d, maxIByUID[paxos.uid]));
@@ -412,8 +447,8 @@ function testWhenShittyTakeTurns(requests, paxoss, done){
       if (maxIByUID[paxos.uid] < requests){
         if (!bail){
           paxos.request({ d: maxIByUID[paxos.uid]+1 }, 
-                        function(v){ 
-                          return maxIByUID[paxos.uid] < v.d;
+                        function(done, v){ 
+                          done(maxIByUID[paxos.uid] < v.d);
                         });
         }
       } else {
@@ -426,9 +461,10 @@ function testWhenShittyTakeTurns(requests, paxoss, done){
           done(null);
         }
       }
+      commitDone();
     });
   });
-  paxoss[0].request({ d: maxIByUID[0]+1 }, function(){ return true; });
+  paxoss[0].request({ d: maxIByUID[0]+1 }, function(done){ done(true); });
 }
 
 function testWhenShitty(requests, paxoss, done){
@@ -440,7 +476,7 @@ function testWhenShitty(requests, paxoss, done){
       rpc.conn.startBeingShitty();
     });
     var commits = {};
-    paxos.on('commit', function(v){
+    paxos.on('commit', function(v, commitDone){
       //console.log(paxos.uid, v.d);
       var err = checkCommits(paxos.uid, commits, v);
       if (err){
@@ -451,7 +487,7 @@ function testWhenShitty(requests, paxoss, done){
       if (paxos.uid == 0 && i < requests){
         i += 1;
         if (!bail)
-          paxos.request({ d: i }, function(){ return true; });
+          paxos.request({ d: i }, function(done){ done(true); });
       } else {
         doneByUID[paxos.uid] = true;
         var allDone = true;
@@ -462,10 +498,11 @@ function testWhenShitty(requests, paxoss, done){
           done(null);
         }
       }
+      commitDone();
     });
   });
   var i = 0;
-  paxoss[0].request({ d: i }, function(){ return true; });
+  paxoss[0].request({ d: i }, function(done){ done(true); });
 }
 
 function checkCommits(uid, commits, v){

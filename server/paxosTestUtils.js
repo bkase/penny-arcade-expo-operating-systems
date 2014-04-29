@@ -135,19 +135,17 @@ function startPaxoss(N, successRate, next){
     setTimeout(function loop(){
       tries += 1;
       isPortTaken(startPort+uid, function(err, portIsTaken){
-        if (!err && !portIsTaken){
-          wss = new WebSocketServer({port: startPort+uid});
-          next();
-        } else {
-          if (tries < 10){
-            wait *= 2;
-            if (wait > 1000)
-              wait = 1000;
-            setTimeout(loop, wait);
+        if (err || portIsTaken){
+          killPaxos(uid);
+        }
+        isPortTaken(startPort+uid, function(err, portIsTaken){
+          if (!err && !portIsTaken){
+            wss = new WebSocketServer({port: startPort+uid});
+            next();
           } else {
             done('revive failed');
           }
-        }
+        });
       })
     }, wait);
 

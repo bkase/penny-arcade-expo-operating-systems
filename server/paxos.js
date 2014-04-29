@@ -71,7 +71,7 @@ Paxos.prototype = {
         uid: this.uid,
         seq: this.seq++,
         v: v,
-      }, function(V){ return isValid(this._extractUserData(V), V); }.bind(this), Iopt, retryOpt, isHiPri);
+      }, function(done, V){ isValid(done, this._extractUserData(V), V); }.bind(this), Iopt, retryOpt, isHiPri);
   },
 
   stop: function(){
@@ -154,8 +154,8 @@ Paxos.prototype = {
       this.paxosInProgress = false;
       this.heartbeatTimeoutId = setTimeout(function(){
         var I = this.I()+1;
-        this._requestHiPri('nop', function(){
-          return !(I in this.commitLog);
+        this._requestHiPri('nop', function(done){
+          done(!(I in this.commitLog));
         }.bind(this), I, false);
       }.bind(this), 1000);
       return;
@@ -163,38 +163,40 @@ Paxos.prototype = {
     this.paxosInProgress = true;
     //console.log(this.uid, this.expBackoff);
     setTimeout(function(){
-      if (request.isValid(request.value)){
-        var N = this.N+1;
-        if (request.I == null && this.oldestMissedI < this.I()+1){
-          this.requestQueue.unshift(request);
-          this._checkAndReq(this.I()+1);
-          process.nextTick(function(){
-            this._processQueue();
-          }.bind(this));
-          return;
-        }
-        var I = (request.I == null) ? (this.I()+1) : request.I;
-
-        this._debug('process request', request, "N", N, "I", I);
-        this._doPaxos(request, N, I, function(err){
-          if (err){
-            this._debug(err);
+      request.isValid(function(valid){
+        if (valid){
+          var N = this.N+1;
+          if (request.I == null && this.oldestMissedI < this.I()+1){
             this.requestQueue.unshift(request);
-            this._debug('retry', request);
-            this.expBackoff *= 2+ -.5 + rng.nextFloat();
-          } else {
-            this.expBackoff = 5;
+            this._checkAndReq(this.I()+1);
+            process.nextTick(function(){
+              this._processQueue();
+            }.bind(this));
+            return;
           }
-          this._reset();
+          var I = (request.I == null) ? (this.I()+1) : request.I;
+
+          this._debug('process request', request, "N", N, "I", I);
+          this._doPaxos(request, N, I, function(err){
+            if (err){
+              this._debug(err);
+              this.requestQueue.unshift(request);
+              this._debug('retry', request);
+              this.expBackoff *= 2+ -.5 + rng.nextFloat();
+            } else {
+              this.expBackoff = 5;
+            }
+            this._reset();
+            process.nextTick(function(){
+              this._processQueue();
+            }.bind(this));
+          }.bind(this));
+        } else {
           process.nextTick(function(){
             this._processQueue();
           }.bind(this));
-        }.bind(this));
-      } else {
-        process.nextTick(function(){
-          this._processQueue();
-        }.bind(this));
-      }
+        }
+      }.bind(this), request.value);
     }.bind(this), this.expBackoff);
   },
 
@@ -226,7 +228,7 @@ Paxos.prototype = {
       if (request.value !== "nop")
         this._requestHiPri(request.value, request.isValid);
       request.value = IV;
-      request.isValid = function(){ return false; };
+      request.isValid = function(done){ done(false); };
       this._debug("iv", request);
     } else if (
       biggestOutput != null && 
@@ -235,7 +237,7 @@ Paxos.prototype = {
       this._requestHiPri(request.value, request.isValid);
       request.value = biggestOutput.Va;
       I = biggestOutput.Ia;
-      request.isValid = function(){ return false; };
+      request.isValid = function(done){ done(false); };
       this._debug("bnava", request);
     }
     var numOK = this._datasNumOK(outputs);
@@ -397,8 +399,8 @@ Paxos.prototype = {
   _checkAndReq: function(I){
     if (this.oldestMissedI < I && !(I in this.commitLog)){
       this._debug('we need an i!', this.oldestMissedI, I);
-      this._requestHiPri('nop', function(){ 
-        return !(I in this.commitLog);
+      this._requestHiPri('nop', function(done){ 
+        done(!(I in this.commitLog));
       }.bind(this), this.oldestMissedI, false);
     }
   },
@@ -459,27 +461,49 @@ Paxos.prototype = {
     this.commitLog[I] = V;
     if (V === 'nop')
       throw new Error('commit got nop');
-    while (this.commitLog[this.oldestMissedI] != null){
-      V = this.commitLog[this.oldestMissedI];
-      if (
-        V.seq >= this.seqLogs[V.uid].oldestMissed && 
-        !(V.seq in this.seqLogs[V.uid].log)
-      ){
-        this._processCommit(V, this.oldestMissedI);
+
+    (function loop(){
+      if (this.commitLog[this.oldestMissedI] != null){
+        V = this.commitLog[this.oldestMissedI];
+        if (
+          V.seq >= this.seqLogs[V.uid].oldestMissed && 
+          !(V.seq in this.seqLogs[V.uid].log)
+        ){
+          this.seqLogs[V.uid].log[V.seq] = true;
+          var oldestMissedI = this.oldestMissedI;
+          this.oldestMissedI++;
+          this._processCommit(loop.bind(this), V, oldestMissedI);
+        } else {
+          this.seqLogs[V.uid].log[V.seq] = true;
+          this.oldestMissedI++;
+        }
+      } else {
+        done();
       }
-      this.seqLogs[V.uid].log[V.seq] = true;
-      //increment oldestMissed
-      this.oldestMissedI++;
-    }
-    done();
+    }.bind(this))();
+    //while (this.commitLog[this.oldestMissedI] != null){
+    //  V = this.commitLog[this.oldestMissedI];
+    //  if (
+    //    V.seq >= this.seqLogs[V.uid].oldestMissed && 
+    //    !(V.seq in this.seqLogs[V.uid].log)
+    //  ){
+    //    this._processCommit(V, this.oldestMissedI);
+    //  }
+    //  this.seqLogs[V.uid].log[V.seq] = true;
+    //  //increment oldestMissed
+    //  this.oldestMissedI++;
+    //}
   },
 
   _extractUserData: function(V){
     return V.v;
   },
 
-  _processCommit: function(V){
-    this.emit('commit', this._extractUserData(V), V);
+  _processCommit: function(done, V, I){
+    if (this.ison('commit'))
+      this.emit('commit', this._extractUserData(V), done, V);
+    else
+      done();
   },
 
   _broadcast: function(name, input, onOneRPCDone){
