@@ -38,6 +38,10 @@ function RecoveryPaxos(){
   }.bind(this));
 }
 
+RecoveryPaxos.setRNGSeed = function(seed){
+  Paxos.setRNGSeed(seed);
+}
+
 RecoveryPaxos.prototype = Object.create(Paxos.prototype);
 RecoveryPaxos.prototype.constructor = RecoveryPaxos;
 

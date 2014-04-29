@@ -1,35 +1,52 @@
-
-var WebSocketServer = require('ws').Server;
-var wss = new WebSocketServer({port: 14222});
-
 var Connection = require('../common/connection').Connection;
 var RPC = require('../common/rpc').RPC;
 var DB = require('./db').DB;
 var Utils = require('../common/utils').Utils;
+var ServerPaxos = require('./serverPaxos');
+
+var WebSocketServer = require('ws').Server;
+var clientPort = Number(process.argv[2]);
+var paxosUID = Number(process.argv[3]);
+var paxosPort = Number(process.argv[4]);
+var paxosHostportByUID = JSON.parse(process.argv[5]);
 
 var db = null;
 
 var nextConnId = 0;
 
-Utils.whoami(function(whoiam){
-  var conString = 'postgres://' + whoiam + '@localhost/cloasis';
-  db = new DB(conString);
+ServerPaxos.init(
+  paxosPort, 
+  paxosUID, 
+  paxosHostportByUID, 
 
-  wss.on('connection', function(ws) {
-    var conn = new Connection(ws);
-    conn.id = nextConnId++;
-    var rpc = new RPC(conn, true);
-    rpc.on('registerUser', registerUser);
-    rpc.on('loginUser', loginUser);
-    rpc.on('search', search);
-    rpc.on('call', call);
-    rpc.on('register', register);
-    rpc.on('info', info);
-    rpc.on('activate', activate);
-    rpc.on('deactivate', deactivate);
-    rpc.on('close', close);
+  function(err, paxos){
+    if (err)
+      throw err;
+    initClientRPC();
   });
-});
+
+function initClientRPC(){
+  var wss = new WebSocketServer({port: clientPort});
+  Utils.whoami(function(whoiam){
+    var conString = 'postgres://' + whoiam + '@localhost/cloasis';
+    db = new DB(conString);
+
+    wss.on('connection', function(ws) {
+      var conn = new Connection(ws);
+      conn.id = nextConnId++;
+      var rpc = new RPC(conn, true);
+      rpc.on('registerUser', registerUser);
+      rpc.on('loginUser', loginUser);
+      rpc.on('search', search);
+      rpc.on('call', call);
+      rpc.on('register', register);
+      rpc.on('info', info);
+      rpc.on('activate', activate);
+      rpc.on('deactivate', deactivate);
+      rpc.on('close', close);
+    });
+  });
+}
 
 var fnTable = {};
 var activeAPIsByConnId = {};
@@ -144,4 +161,3 @@ function close(rpc){
   }
   delete activeAPIsByConnId[rpc.conn.id];
 }
-

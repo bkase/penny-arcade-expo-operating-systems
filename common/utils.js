@@ -85,6 +85,12 @@
       }.bind(module);
       return module;
     },
+    size: function(obj){
+      var n = 0;
+      for (var prop in obj)
+        n++;
+      return n;
+    },
     bytesToString: function(bytes){
       return bytes.map(function(c){ return String.fromCharCode(c); }).join('')
     },

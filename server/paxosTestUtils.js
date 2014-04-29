@@ -45,7 +45,7 @@ function startPaxoss(N, successRate, next){
   var rpcs = [];  
   var servers = [];
   var paxoss = [];
-  var startPort = 12000;
+  var startPort = 15000;
   for (var i = 0; i < N; i++){
     rpcs[i] = [];
     with ({i: i}){

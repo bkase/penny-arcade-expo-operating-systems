@@ -16,7 +16,7 @@ function Paxos(uid, serverRPCPool, kill){
 
   this._addServerRPC(this.rpc);
 
-  this.DEBUG = false;
+  this.DEBUG = true;
 
   this.commitLog = [];
   this.oldestMissedI = 0;
@@ -59,6 +59,11 @@ function Paxos(uid, serverRPCPool, kill){
   this.requestQueue = [];
 
   this._processQueue();
+}
+
+
+Paxos.setRNGSeed = function(seed){
+  rng = new Utils.RNG(seed);
 }
 
 Paxos.prototype = {
@@ -180,9 +185,10 @@ Paxos.prototype = {
           this._doPaxos(request, N, I, function(err){
             if (err){
               this._debug(err);
-              this.requestQueue.unshift(request);
+              if (request.retry)
+                this.requestQueue.unshift(request);
               this._debug('retry', request);
-              this.expBackoff *= 2+ -.5 + rng.nextFloat();
+              this.expBackoff *= 2 + -.5 + rng.nextFloat() + rng.nextInt()%20;
             } else {
               this.expBackoff = 5;
             }
