@@ -36,6 +36,8 @@ function RecoveryPaxos(){
       }
     }.bind(this));
   }.bind(this));
+  
+  this.toSend = [];
 }
 
 RecoveryPaxos.setRNGSeed = function(seed){
@@ -49,9 +51,23 @@ RecoveryPaxos.prototype.request = function(v, isValid, Iopt, retryOpt, isHiPri){
   arguments[0] = {
     userMsg: v,
   }
-  Paxos.prototype.request.apply(this, arguments);
+
+  if (this.maxIgnoreI != null && this.I() <= this.maxIgnoreI){
+    this.toSend.push(arguments);
+  } else {
+    Paxos.prototype.request.apply(this, arguments);
+  }
 }
 RecoveryPaxos.prototype._processCommit = function(done, V, I){
+  if (this.maxIgnoreI === I){
+    this.maxIgnoreI = null;
+    this.toSend.forEach(function(args){
+      Paxos.prototype.request.apply(this, args);
+    }.bind(this));
+  }
+  if (this.uid === V.uid){
+    this.seq = Math.max(V.seq, this.seq)+1;
+  }
   if ('userMsg' in V.v){
     if (this.ison('commit'))
       this.emit('commit', V.v.userMsg, done);

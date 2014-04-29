@@ -9,6 +9,7 @@ var tests = [
   [9, 1, testNodeFailureChain],
   [11, 1, testNodeFailureChain],
   [13, 1, testNodeFailureChain],
+  [3, 1, testNodeFailSend],
 
   [3, 1, testHeartbeat],
 
@@ -132,6 +133,36 @@ function testNodeFailureChain(paxoss, done){
     isDone = true;
   }, 5000);
   paxoss[1].serverRPCPool[0].conn.close();
+}
+
+function testNodeFailSend(paxoss, done){
+  var recoverCount = 0;
+  var isDone = false;
+  paxoss.forEach(function(paxos){
+    paxos.on('recovered', function(uid){
+      recoverCount += 1;
+      if (recoverCount == 2){
+        paxoss[1].request('someval2', function(done){ done(true); });
+        paxoss[0].on('commit', function(v, commitDone){
+          if (v === 'someval2'){
+            if (!isDone)
+              done(null);
+            isDone = true;
+            commitDone();
+          }
+        });
+      }
+    });
+  });
+  setTimeout(function(){
+    if (!isDone)
+      done(new Error('timed out'));
+    isDone = true;
+  }, 5000);
+  paxoss[1].request('someval', function(done){ done(true); });
+  setTimeout(function(){
+    paxoss[1].stop();
+  }, 100);
 }
 
 function testHeartbeat(paxoss, done){

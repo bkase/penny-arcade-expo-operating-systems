@@ -5,23 +5,36 @@ var Utils = require('../common/utils').Utils;
 var ServerPaxos = require('./serverPaxos');
 
 var WebSocketServer = require('ws').Server;
-var clientPort = Number(process.argv[2]);
-var paxosUID = Number(process.argv[3]);
-var paxosPort = Number(process.argv[4]);
-var paxosHostportByUID = JSON.parse(process.argv[5]);
+var paxosUID = Number(process.argv[2]);
+var paxosPortByUID = JSON.parse(process.argv[3]);
+var paxosHostportByUID = JSON.parse(process.argv[4]);
+var clientPortByUID = JSON.parse(process.argv[5]);
+var paxosIsRevive = Boolean(Number(process.argv[6]));
+var clientPort = clientPortByUID[paxosUID];
 
 var db = null;
 
 var nextConnId = 0;
 
 ServerPaxos.init(
-  paxosPort, 
   paxosUID, 
+  paxosPortByUID,
   paxosHostportByUID, 
+  clientPortByUID,
+  paxosIsRevive,
 
   function(err, paxos){
     if (err)
       throw err;
+    console.log('gp', paxos.uid);
+    paxos.on('commit', function(v, done){
+      console.log(v);
+      done();
+    });
+    if (paxos.uid === 0){
+      console.log("SEND");
+      paxos.request({ msg: 'hi', uid: paxos.uid, '3': paxosIsRevive }, function(done, v){ done(true); });
+    }
     initClientRPC();
   });
 

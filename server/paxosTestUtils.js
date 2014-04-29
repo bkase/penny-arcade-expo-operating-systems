@@ -3,6 +3,7 @@ var WebSocketServer = require('ws').Server;
 var RPC = require('../common/rpc').RPC;
 var WebSocket = require('ws');
 var Paxos = require('./recoveryPaxos').RecoveryPaxos;
+var Utils = require('../common/utils').Utils;
 //var Paxos = require('./paxos').Paxos;
 
 function Test(N, successRate, fn, next){
@@ -45,7 +46,7 @@ function startPaxoss(N, successRate, next){
   var rpcs = [];  
   var servers = [];
   var paxoss = [];
-  var startPort = 15000;
+  var startPort = 11000;
   for (var i = 0; i < N; i++){
     rpcs[i] = [];
     with ({i: i}){
@@ -112,20 +113,6 @@ function startPaxoss(N, successRate, next){
     })
     .listen(port)
   }
-  //https://gist.github.com/timoxley/1689041
-  function isPortTaken(port, fn) {
-    var net = require('net')
-    var tester = net.createServer()
-    .once('error', function (err) {
-      if (err.code != 'EADDRINUSE') return fn(err)
-      fn(null, true)
-    })
-    .once('listening', function() {
-      tester.once('close', function() { fn(null, false) })
-      .close()
-    })
-    .listen(port)
-  }
 
   function revive(successRate, numServers, uid, done){
     var hostport = 'ws://localhost:' + (startPort+uid);
@@ -134,11 +121,11 @@ function startPaxoss(N, successRate, next){
     var wait = 50;
     setTimeout(function loop(){
       tries += 1;
-      isPortTaken(startPort+uid, function(err, portIsTaken){
+      Utils.isPortTaken(startPort+uid, function(err, portIsTaken){
         if (err || portIsTaken){
           killPaxos(uid);
         }
-        isPortTaken(startPort+uid, function(err, portIsTaken){
+        Utils.isPortTaken(startPort+uid, function(err, portIsTaken){
           if (!err && !portIsTaken){
             wss = new WebSocketServer({port: startPort+uid});
             next();

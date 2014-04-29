@@ -37,6 +37,22 @@
     }
   }
 
+  //https://gist.github.com/timoxley/1689041
+  function isPortTaken(port, fn) {
+    var net = require('net')
+    var tester = net.createServer()
+    .once('error', function (err) {
+      if (err.code != 'EADDRINUSE') return fn(err)
+      fn(null, true)
+    })
+    .once('listening', function() {
+      tester.once('close', function() { fn(null, false) })
+      .close()
+    })
+    .listen(port)
+  }
+
+
   var Utils = {
     count: function(){
       var count = Object.create(Count.prototype);
@@ -44,6 +60,7 @@
       return count;
     },
     Count: Count,
+    isPortTaken: isPortTaken,
     RNG: RNG,
     makeEventable: function(module){
       module.on = function(event, fn){

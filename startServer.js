@@ -1,32 +1,38 @@
+
 var colors = require('colors');
 var spawn = require('child_process').spawn;
 var extend = require('util')._extend;
 
-var portsByUID = {}
-var hostportByUID = {};
-var N = 3;
-var startPort = 15000;
-var startClientPort = 13000;
-for (var uid = 0; uid < N; uid++){
-  var port = startPort + uid;
-  portsByUID[uid] = port;
-  hostportByUID[uid] = 'ws://localhost:' + port;
+if (require.main === module){
+  var portsByUID = {}
+  var hostportByUID = {};
+  var clientPortByUID = {};
+  var N = 3;
+  var startPort = 31200;
+  var startClientPort = startPort+1000;
+  for (var uid = 0; uid < N; uid++){
+    var port = startPort + uid;
+    portsByUID[uid] = port;
+    hostportByUID[uid] = 'ws://localhost:' + port;
+    clientPortByUID[uid] = startClientPort + uid;
+  }
+
+  var processByUID = {};
+
+  for (var uid = 0; uid < N; uid++){
+    processByUID[uid] = startServer(uid, portsByUID, hostportByUID, clientPortByUID, false);
+  }
+
+  setTimeout(function(){
+    processByUID[0].kill('SIGINT');
+  }, 2000);
 }
 
-var processByUID = {};
-
-for (var uid = 0; uid < N; uid++){
-  processByUID[uid] = startServer(startClientPort+uid, uid, portsByUID[uid], hostportByUID);
-}
-
-setTimeout(function(){
-  processByUID[0].kill();
-}, 2000);
-
-function startServer(clientPort, uid, port, hostportByUID){
-  var hostportByUID = JSON.parse(JSON.stringify(hostportByUID));
-  delete hostportByUID[uid];
-  var process = spawn('node', ['server/server.js', clientPort, uid, port, JSON.stringify(hostportByUID)]);
+function startServer(uid, portsByUID, hostportByUID, clientPortByUID, isRevive){
+  var reviveArg = 0;
+  if (isRevive)
+    isRevive = 1;
+  var process = spawn('node', ['server/server.js', uid, JSON.stringify(portsByUID), JSON.stringify(hostportByUID), JSON.stringify(clientPortByUID), isRevive]);
 
   process.stdout.on('data', function(data){
     console.log((uid + 'stdout: ' + data).blue);
@@ -42,3 +48,5 @@ function startServer(clientPort, uid, port, hostportByUID){
 
   return process;
 }
+
+exports.startServer = startServer;
