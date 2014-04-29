@@ -20,8 +20,6 @@ DB.prototype = {
       case 'createUser': 
         this._doCreateUser(V, V.username, V.passhash);
         break;
-      case '':
-
       default:
         console.log('dropped ', V);
     }
@@ -34,8 +32,8 @@ DB.prototype = {
       done.apply(done, arguments);
     };
   },
-
-  selectNonEmpty: function(query, done) {
+  
+  _select: function(query, done) {
     pg.connect(this.conString, function(err, client, freeClient) {
       if (err) {
         done(err);
@@ -47,9 +45,19 @@ DB.prototype = {
         if (err) {
           done(err);
         } else {
-          done(null, res.rows.length > 0);
+          done(null, res);
         }
       });
+    });
+  },
+
+  _selectNonEmpty: function(query, done) {
+    this._select(query, function(err, res) {
+      if (err) {
+        done(err);
+      } else {
+        done(null, res.rows.length > 0);
+      }
     });
   },
 
@@ -79,7 +87,7 @@ DB.prototype = {
         this.cb.lazyCallCallback(V)("error creating user, even though it doesn't exist");
       }
       console.log("successfully created user");
-      this.cb.lazyCallCallback(V)(null);
+      this.cb.lazyCallCallback(V)(null, false);
     }.bind(this));
   },
 
@@ -92,18 +100,23 @@ DB.prototype = {
               function isValid(isValidDone, v) { 
                 var users = schema.users;
                 var query = users.select(users.star()).from(users).where(users.username.equals(username)).toQuery();
-                this.selectNonEmpty(query, function(err, exists) {
+                this._selectNonEmpty(query, function(err, exists) {
                   if (err) {
                     isValidDone(false);
-                    this.cb.lazyCallCallback(V)('username exists');
+                    this.cb.lazyCallCallback(V)('error querying username');
                     console.log(err);
                     return;
                   }
 
-                  console.log("Username exists?: ", exists);
+                  if (exists) {
+                    isValidDone(false);
+                    console.log("Username exists");
+                    this.cb.lazyCallCallback(V)(null, true);
+                    return;
+                  }
 
-                  isValidDone(!exists);
-                });
+                  isValidDone(true);
+                }.bind(this));
               }.bind(this));
   },
 
@@ -138,30 +151,22 @@ DB.prototype = {
   }.bind(this),
 
   validateUser: function(username, password, done){
-    pg.connect(this.conString, function(err, client, freeClient) {
+    var users = schema.users;
+    var query = users.select(users.passhash).from(users).where(users.username.equals(username)).toQuery();
+    var passhash = this._passwordToHash(username, password);
+    this._select(query, function(err, res) {
       if (err) {
-        done(err);
-        return;
+        done('error querying user/pass');
+      } else if (res.rows.length != 1) {
+        console.log(res.rows);
+        done(null, false);
+      } else if (res.rows[0].passhash !== passhash) {
+        console.log(res.rows[0], passhash, username);
+        done(null, false);
+      } else {
+        done(null, true);
       }
-
-      var users = schema.users;
-      var query = users.select(users.passhash).from(users).where(users.username.equals(username)).toQuery();
-      client.query(query.text, query.values, function(err, result){
-        freeClient();
-        if (err) {
-          done(err);
-        }
-        else if (result.rows.length != 1){
-          done(null, false);
-        }
-        else if (result.rows[0].passhash !== this._passwordToHash(username, password)){
-          done(null, false);
-        }
-        else {
-          done(null, true);
-        }
-      }.bind(this)); 
-    }.bind(this));
+    });
   },
 
   registerAPIs: function(apiSpecs, done){

@@ -13,7 +13,6 @@ var clientPortByUID = JSON.parse(process.argv[5]);
 var paxosIsRevive = Boolean(Number(process.argv[6]));
 var clientPort = clientPortByUID[paxosUID];
 
-
 var nextConnId = 0;
 
 ServerPaxos.init(
@@ -51,7 +50,7 @@ var apis = null;
 function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
   Utils.whoami(function(whoiam){
-    var conString = 'postgres://' + whoiam + '@localhost/cloasis';
+    var conString = 'postgres://' + whoiam + '@localhost/cloasis' + paxos.uid;
     db = new DB(conString);
     apis = new APIs(paxosUID);
 
