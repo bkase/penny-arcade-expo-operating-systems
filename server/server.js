@@ -72,38 +72,21 @@ function initClientRPC(paxos){
       rpc.on('register', register);
       rpc.on('info', info);
 
-      rpc.on('call', call);
-      rpc.on('activate', activate);
-      rpc.on('deactivate', deactivate);
+      rpc.on('call', apis.call.bind(apis));
+      rpc.on('activate', apis.activate.bind(apis));
+      rpc.on('deactivate', apis.deactivate.bind(apis));
     });
   });
-
-  function close(rpc){
-    apis.close(rpc);
-  }
 }
 
-function call(rpc, data, done){
-  //TODO check user logged in
-  apis.call(rpc, data, done);
+function close(rpc){
+  apis.close(rpc);
 }
-
-function activate(rpc, data, done){
-  //TODO check user logged in + api registered + owned by user
-  apis.activate(rpc, data, done);
-}
-
-function deactivate(rpc, data, done){
-  //TODO check user logged in + api owned by user
-  apis.deactivate(rpc, data, done);
-}
-
 
 //==========================
 //    DB
 //==========================
 
-//PAXOS will go in the middle of these functions later
 function registerUser(rpc, data, done){
   db.createUser(data.username, data.password, function(err, exists){
     if (err)

@@ -2,19 +2,33 @@ var Utils = require('../common/utils').Utils;
 
 function APIs(uid){
   Utils.makeEventable(this);
-  this.fnTableByUID = {};
+  this.apisByUID = {};
+  this.activeAPIs = {};
   this.activeAPIsByConnId = {};
   this.uid = uid;
+
+  this.nextCbId = 0;
+  this.cbById = {};
 }
 
 APIs.prototype = {
 
   commit: function(V, done){
-    console.log(V);
-    console.log(done);
+    if (V.name === 'activate'){
+      this.activeAPIs[Utils.stringifyAPIIdentifier(V.api)] = true;
+      this._lazyAddUIDToAPIs(V.uid);
+      this.apisByUID[V.uid][Utils.stringifyAPIIdentifier(V.api)] = V.api;
+      this._lazyCallCallback(V)(null);
+      if (V.uid === this.uid){
+        
+      }
+    } else {
+      console.log('apis dropped', V);
+    }
   },
 
   call: function(rpc, data, done){
+    //TODO check user logged in
     //Var apiStr = Utils.stringifyAPIIdentifier(data.apiIdentifier);
     //If (!(apiStr in fnTable)){
     //  done({ err: 'api not active' });
@@ -28,30 +42,30 @@ APIs.prototype = {
   },
 
   activate: function(rpc, data, done){
-    //var err = { errs: [] };
-    //var wasErr = false;
-    //data.apiIdentifiers.forEach(function(apiIdentifier){
-    //  var apiStr = Utils.stringifyAPIIdentifier(apiIdentifier);
-    //  if (apiStr in fnTable){
-    //    err.errs.push('api already activated');
-    //    wasErr = true;
-    //  }
-    //  else {
-    //    fnTable[apiStr] = rpc;
-    //    if (!(rpc.conn.id in activeAPIsByConnId)){
-    //      activeAPIsByConnId[rpc.conn.id] = {};
-    //    }
-    //    activeAPIsByConnId[rpc.conn.id][apiStr] = true;
-    //  }
-    //  err.errs.push(null);
-    //});
-    //if (wasErr)
-    //  done({ err: err });
-    //else
-    //  done({ err: null });
+    //TODO check user logged in + api registered + owned by user
+    var err = { errs: {} };
+    var wasErr = false;
+    var countActivates = Utils.count(Utils.size(data.apiIdentifiers), next.bind(this));
+    data.apiIdentifiers.forEach(function(apiIdentifier, i){
+      this._activateAPI(apiIdentifier, function(err){
+        if (err){
+          err.errs[i] = 'api already activated';
+          wasErr = true;
+        }
+        countActivates.sub();
+      }.bind(this));
+    }.bind(this));
+
+    function next(){
+      if (wasErr)
+        done({ err: err });
+      else
+        done({ err: null });
+    }
   },
 
-  deactivate: function(rpc, data, done){
+  deactivate: function(rpc, data, done) {
+    //TODO check user logged in + api owned by user
     //delete fnTable[Utils.stringifyAPIIdentifier(apiIdentifier)];
     //if (rpc.conn.id in activeAPIsByConnId){
     //  delete activeAPIsByConnId[rpc.conn.id][apiStr];
@@ -59,12 +73,51 @@ APIs.prototype = {
     //done({ err: null });
   },
   close: function(rpc){
-    if (rpc.conn.id in activeAPIsByConnId){
-      for (var apiStr in activeAPIsByConnId[rpc.conn.id]){
-        delete fnTable[apiStr];
+    //if (rpc.conn.id in activeAPIsByConnId){
+    //  for (var apiStr in activeAPIsByConnId[rpc.conn.id]){
+    //    delete fnTable[apiStr];
+    //  }
+    //}
+    //delete activeAPIsByConnId[rpc.conn.id];
+  },
+
+  //=================
+  //  HELPERS
+  //=================
+
+  _lazyCallCallback: function(V){
+    return function(){
+      if (V.uid === this.uid){
+        if (V.cbId in this.cbById){
+          this.cbById[V.cbId].apply(null, arguments);
+        } else {
+          console.log(this.uid, 'dropped', V.cbId);
+        }
       }
+    }.bind(this);
+  },
+
+  _addCallback: function(V, done){
+    V.cbId = this.nextCbId++;
+    this.cbById[V.cbId] = done;
+  },
+
+  _lazyAddUIDToAPIs: function(uid){
+    if (!(uid in this.apisByUID)){
+      this.apisByUID[uid] = {}
     }
-    delete activeAPIsByConnId[rpc.conn.id];
+  },
+
+  _activateAPI: function(api, done){
+    var V = {
+      name: 'activate',
+      uid: this.uid,
+      api: api
+    };
+    this._addCallback(V, done);
+    this.emit('request', V, function(done){
+      done(!(Utils.stringifyAPIIdentifier(api) in this.activeAPIs));
+    }.bind(this));
   }
 
 }

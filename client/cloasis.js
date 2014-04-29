@@ -46,6 +46,7 @@
     this.conn = conn;
     this.fnTable = {};
     this.rpc = new RPC(this.conn);
+    this.rpc.TIMEOUT = 10000000;
     this.rpc.on('call', this.parseCall.bind(this));
   }
 
