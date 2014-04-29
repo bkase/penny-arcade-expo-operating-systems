@@ -11,6 +11,11 @@ function DB(conString){
 DB.prototype = {
   constructor: DB,
 
+  commit: function(V, done){
+    console.log(V);
+    done();
+  },
+
   freeAndDone: function(free, done) {
     return function() {
       free();

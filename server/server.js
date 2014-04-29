@@ -26,17 +26,22 @@ ServerPaxos.init(
   function(err, paxos){
     if (err)
       throw err;
-    console.log('gp', paxos.uid);
-    paxos.on('commit', function(v, done){
-      console.log(v);
-      done();
-    });
-    if (paxos.uid === 0){
-      console.log("SEND");
-      paxos.request({ msg: 'hi', uid: paxos.uid, '3': paxosIsRevive }, function(done, v){ done(true); });
-    }
+    console.log('init', paxos.uid);
+    paxos.on('commit', onCommit);
     initClientRPC();
   });
+
+function onCommit(V, done){
+  if (V.name.indexOf('db::') === 0){
+    V.name = V.name.slice(4);
+    db.commit(V, done);
+  } else {
+    console.log('dropped ' + V);
+
+  }
+
+  done();
+}
 
 function initClientRPC(){
   var wss = new WebSocketServer({port: clientPort});

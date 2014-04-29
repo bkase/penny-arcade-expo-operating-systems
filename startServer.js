@@ -22,10 +22,6 @@ if (require.main === module){
   for (var uid = 0; uid < N; uid++){
     processByUID[uid] = startServer(uid, portsByUID, hostportByUID, clientPortByUID, false);
   }
-
-  setTimeout(function(){
-    processByUID[0].kill('SIGINT');
-  }, 2000);
 }
 
 function startServer(uid, portsByUID, hostportByUID, clientPortByUID, isRevive){
