@@ -116,7 +116,11 @@ APIs.prototype = {
     };
     this._addCallback(V, done);
     this.emit('request', V, function(done){
-      done(!(Utils.stringifyAPIIdentifier(api) in this.activeAPIs));
+      var valid = !(Utils.stringifyAPIIdentifier(api) in this.activeAPIs);
+      if (!valid){
+        this._lazyCallCallback(V)('api activated');
+      }
+      done(valid);
     }.bind(this));
   }
 
