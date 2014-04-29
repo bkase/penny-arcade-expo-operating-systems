@@ -27,6 +27,7 @@ ServerPaxos.init(
       throw err;
     console.log('init', paxos.uid);
     paxos.on('commit', onCommit);
+    paxos.on('receiveMsg', onReceiveMsg);
     initClientRPC(paxos);
   });
 
@@ -44,6 +45,15 @@ function onCommit(V, done){
   done();
 }
 
+function onReceiveMsg(name, msg, done){
+  if (name.indexOf('apis::') == 0){
+    name = name.slice(6);
+    apis.receiveMsg(name, msg, done);
+  } else {
+    console.log('dropped ' + V);
+  }
+}
+
 var db = null;
 var apis = null;
 
@@ -57,6 +67,10 @@ function initClientRPC(paxos){
     apis.on('request', function(V, isValid){
       V.name = 'apis::' + V.name;
       paxos.request(V, isValid);
+    });
+    
+    apis.on('sendMsg', function(targetUID, name, msg, done){
+      paxos.sendMsg(targetUID, 'apis::' + name, msg, done);
     });
 
     db.on('request', function(V, isValid) {

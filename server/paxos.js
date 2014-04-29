@@ -98,10 +98,34 @@ Paxos.prototype = {
     }
   },
 
+  sendMsg: function(targetUID, name, msg, done){
+    var data = {
+      name: name,
+      msg: msg
+    };
+    if (targetUID === this.uid){
+      this._receiveMsg(data, function(output){
+        done(null, output)
+      });
+    } else {
+      this._rpcByUID(targetUID).call('receiveMsg', data, done, 100000000);
+    }
+  },
+
   //=========== Helpers ===========
 
   I: function(){
     return this.commitLog.length-1;
+  },
+
+  _rpcByUID: function(uid){
+    if (this.uid === uid)
+      return this.rpc;
+    for (var i = 0; i < this.serverRPCPool.length; i++){
+      if (this.serverRPCPool[i].targetName === uid){
+        return this.serverRPCPool[i];
+      }
+    }
   },
 
   _requestHiPri: function(v, isValid, Iopt, retryOpt){
@@ -530,7 +554,12 @@ Paxos.prototype = {
     rpc.on('paxos.prepare', this._prepare.bind(this));
     rpc.on('paxos.accept', this._accept.bind(this));
     rpc.on('paxos.commit', this._commit.bind(this));
+    rpc.on('receiveMsg', this._receiveMsg.bind(this));
   },
+
+  _receiveMsg: function(data, done){
+    this.emit('receiveMsg', data.name, data.msg, done);
+  }
 }
 
 exports.Paxos = Paxos;

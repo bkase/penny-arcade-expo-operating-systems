@@ -17,8 +17,9 @@
   //======================
 
   var Cloasis = {
-    loginUser: function(username, password, done){
-      var conn = new Connection(new WebSocket('ws://localhost:32200'));
+    hostport: 'ws://localhost:32200',
+    loginUser: function(username, password, done, hostport){
+      var conn = new Connection(new WebSocket(Cloasis.hostport));
       conn.on('open', function() {
         var session = new Session(conn);
         session.loginUser(username, password, function(err){
@@ -27,8 +28,8 @@
       });
     },
 
-    registerUser: function(username, password, done){
-      var conn = new Connection(new WebSocket('ws://localhost:32200'));
+    registerUser: function(username, password, done, hostport){
+      var conn = new Connection(new WebSocket(Cloasis.hostport));
       conn.on('open', function() {
         var session = new Session(conn);
         session.registerUser(username, password, function(err){

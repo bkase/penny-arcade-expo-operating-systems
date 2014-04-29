@@ -22,7 +22,7 @@
 
   RPC.prototype = {
     constructor: RPC,
-    call: function(name, input, done){
+    call: function(name, input, done, timeout){
       var requestId = this.nextRequestId++
       this.conn.send(Utils.jsonToBytes({
         requestId: requestId,
@@ -35,7 +35,7 @@
           this.fnTable[requestId]('timeout');
           delete this.fnTable[requestId];
         }
-      }.bind(this), this.TIMEOUT);
+      }.bind(this), timeout || this.TIMEOUT);
       this.fnTable[requestId] = done;
     },
     parseMsg: function(bytes){

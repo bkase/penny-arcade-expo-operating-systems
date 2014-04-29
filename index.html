@@ -6,11 +6,12 @@
 <script src="client/cloasis.js"></script>
 <script>
 
+Cloasis.hostport = 'ws://localhost:32201';
 Cloasis.loginUser('evan', 'arst', function(err, session){
   if (err)
     throw err;
 
-  var apiId = { namespace: "evan.test", name: "isPrime", version: 0.1 };
+  var apiId = { namespace: "evan.test.isPrime", name: "isPrime", version: 0.1 };
 
   session.call(apiId, { n: 7 }, function(err, output){
     if (err)
