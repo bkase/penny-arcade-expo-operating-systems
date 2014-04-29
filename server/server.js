@@ -3,6 +3,7 @@ var RPC = require('../common/rpc').RPC;
 var DB = require('./db').DB;
 var Utils = require('../common/utils').Utils;
 var ServerPaxos = require('./serverPaxos');
+var APIs = require('./apis').APIs;
 
 var WebSocketServer = require('ws').Server;
 var paxosUID = Number(process.argv[2]);
@@ -28,46 +29,63 @@ ServerPaxos.init(
       throw err;
     console.log('init', paxos.uid);
     paxos.on('commit', onCommit);
-    initClientRPC();
+    initClientRPC(paxos);
   });
 
 function onCommit(V, done){
   if (V.name.indexOf('db::') === 0){
     V.name = V.name.slice(4);
     db.commit(V, done);
+  } else if (V.name.indexOf('apis::') == 0){
+    V.name = V.name.slice(6);
+    apis.commit(V, done);
   } else {
     console.log('dropped ' + V);
-
   }
 
   done();
 }
 
-function initClientRPC(){
+function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
   Utils.whoami(function(whoiam){
     var conString = 'postgres://' + whoiam + '@localhost/cloasis';
     db = new DB(conString);
+    apis = new APIs(paxosUID);
+
+    apis.on('request', function(V, isValid){
+      V.name = 'apis::' + V.name;
+      paxos.request(V, isValid);
+    });
 
     wss.on('connection', function(ws) {
       var conn = new Connection(ws);
       conn.id = nextConnId++;
       var rpc = new RPC(conn, true);
+      rpc.on('close', close);
+
       rpc.on('registerUser', registerUser);
       rpc.on('loginUser', loginUser);
       rpc.on('search', search);
-      rpc.on('call', call);
       rpc.on('register', register);
       rpc.on('info', info);
-      rpc.on('activate', activate);
-      rpc.on('deactivate', deactivate);
-      rpc.on('close', close);
+
+      rpc.on('call', apis.call.bind(apis));
+      rpc.on('activate', apis.activate.bind(apis));
+      rpc.on('deactivate', apis.deactivate.bind(apis));
     });
   });
+
+  function close(rpc){
+    apis.close(rpc);
+  }
 }
 
-var fnTable = {};
-var activeAPIsByConnId = {};
+
+
+//==========================
+//    DB
+//==========================
 
 //PAXOS will go in the middle of these functions later
 function registerUser(rpc, data, done){
@@ -120,62 +138,4 @@ function register(rpc, data, done){
     else
       done({ err: null });
   });
-}
-
-function call(rpc, data, done){
-  //TODO check user logged in
-  var apiStr = Utils.stringifyAPIIdentifier(data.apiIdentifier);
-  if (!(apiStr in fnTable)){
-    done({ err: 'api not active' });
-    return;
-  }
-  fnTable[apiStr].call('call', data, function(err, output){
-    if (err)
-      throw err;
-    done(output);
-  });
-
-}
-
-function activate(rpc, data, done){
-  //TODO check user logged in + api registered + owned by user
-  var err = { errs: [] };
-  var wasErr = false;
-  data.apiIdentifiers.forEach(function(apiIdentifier){
-    var apiStr = Utils.stringifyAPIIdentifier(apiIdentifier);
-    if (apiStr in fnTable){
-      err.errs.push('api already activated');
-      wasErr = true;
-    }
-    else {
-      fnTable[apiStr] = rpc;
-      if (!(rpc.conn.id in activeAPIsByConnId)){
-        activeAPIsByConnId[rpc.conn.id] = {};
-      }
-      activeAPIsByConnId[rpc.conn.id][apiStr] = true;
-    }
-    err.errs.push(null);
-  });
-  if (wasErr)
-    done({ err: err });
-  else
-    done({ err: null });
-}
-
-function deactivate(rpc, data, done){
-  //TODO check user logged in + api owned by user
-  delete fnTable[Utils.stringifyAPIIdentifier(apiIdentifier)];
-  if (rpc.conn.id in activeAPIsByConnId){
-    delete activeAPIsByConnId[rpc.conn.id][apiStr];
-  }
-  done({ err: null });
-}
-
-function close(rpc){
-  if (rpc.conn.id in activeAPIsByConnId){
-    for (var apiStr in activeAPIsByConnId[rpc.conn.id]){
-      delete fnTable[apiStr];
-    }
-  }
-  delete activeAPIsByConnId[rpc.conn.id];
 }
