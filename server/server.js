@@ -60,6 +60,11 @@ function initClientRPC(paxos){
       paxos.request(V, isValid);
     });
 
+    db.on('request', function(V, isValid) {
+      V.name = 'db::' + V.name;
+      paxos.request(V, isValid);
+    });
+
     wss.on('connection', function(ws) {
       var conn = new Connection(ws);
       conn.id = nextConnId++;

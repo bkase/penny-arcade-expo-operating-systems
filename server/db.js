@@ -3,16 +3,28 @@ var sql = require('sql');
 var schema = require('./schema');
 var pg = require('pg');
 var Utils = require('../common/utils').Utils;
+var CB = require('../common/cb').CB;
 
-function DB(conString){
+function DB(conString, uid){
   this.conString = conString;
+  Utils.makeEventable(this);
+  this.uid = uid;
+  this.cb = new CB(uid);
 }
 
 DB.prototype = {
   constructor: DB,
 
   commit: function(V, done){
-    console.log(V);
+    switch (V.name) {
+      case 'createUser': 
+        this._doCreateUser(V, V.username, V.passhash);
+        break;
+      case '':
+
+      default:
+        console.log('dropped ', V);
+    }
     done();
   },
 
@@ -23,61 +35,76 @@ DB.prototype = {
     };
   },
 
-  createUser: function(username, password, done){
+  selectNonEmpty: function(query, done) {
     pg.connect(this.conString, function(err, client, freeClient) {
       if (err) {
         done(err);
         return;
       }
 
-      this.transaction(client, this.freeAndDone(freeClient, done), function(revert, finish) {
-        return function() {
-          Utils.waterfall([
-            function(next) {
-              var users = schema.users;
-              var query = users.select(users.star()).from(users).where(users.username.equals(username)).toQuery();
-              client.query(query.text, query.values, next); 
-            },
+      client.query(query.text, query.values, function(err, res) {
+        freeClient()
+        if (err) {
+          done(err);
+        } else {
+          done(null, res.rows.length > 0);
+        }
+      });
+    });
+  },
 
-            function(result, next) {
-              if (result.rows.length > 0) {
-                next(null, true);
-              } else {
-                next(null, false);
-              }
-            },
+  _insertQuery: function(query, done) {
+    pg.connect(this.conString, function(err, client, freeClient) {
+      if (err) {
+        done(err);
+        return;
+      }
+      client.query(query.text, query.values, function(err, res) {
+        freeClient();
+        if (err) {
+          done(err);
+        } else {
+          done(null);
+        }
+      });
+    });
+  },
 
-            function(isExist, next) {
-              if (isExist) {
-                next(null, true);
-              } else {
-                var query = schema.users.insert({'username':username, 'passhash':this._passwordToHash(username, password)}).toQuery();
-                client.query(query.text, query.values, function(err, res) {
-                  if (err) {
-                    next(err);
-                  } else {
-                    next(null, false);
-                  }
-                });
-              }
-            }.bind(this)
-
-          ], function done(err, isExist) {
-            if (err) {
-              revert(finish, err);
-              return;
-            } else {
-              if (isExist) {
-                revert(finish, null, true);
-                return;
-              } else {
-                finish(null, false);
-              }
-            }
-          });
-        }.bind(this);
-      }.bind(this));
+  _doCreateUser: function(V, username, passhash) {
+    var query = schema.users.insert({'username':username, 'passhash':passhash}).toQuery();
+    this._insertQuery(query, function(err) {
+      if (err) {
+        // TODO: Try again, and then die hard if fails 
+        console.log("error creating user");
+        this.cb.lazyCallCallback(V)("error creating user, even though it doesn't exist");
+      }
+      console.log("successfully created user");
+      this.cb.lazyCallCallback(V)(null);
     }.bind(this));
+  },
+
+  createUser: function(username, password, done){
+    var V = { name: 'createUser', 
+              username: username, 
+              passhash: this._passwordToHash(username, password) };
+    this.cb.addCallback(V, done);
+    this.emit('request', V, 
+              function isValid(isValidDone, v) { 
+                var users = schema.users;
+                var query = users.select(users.star()).from(users).where(users.username.equals(username)).toQuery();
+                this.selectNonEmpty(query, function(err, exists) {
+                  if (err) {
+                    isValidDone(false);
+                    this.cb.lazyCallCallback(V)('username exists');
+                    console.log(err);
+                    return;
+                  }
+
+                  console.log("Username exists?: ", exists);
+
+                  isValidDone(!exists);
+                });
+              }.bind(this));
   },
 
   transaction: function(client, done, andThen) {
