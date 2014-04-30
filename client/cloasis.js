@@ -8,7 +8,6 @@
   } else {
     Connection = exports.Connection;
     WebSocket = exports.WebSocket;
-    WebSocket = undefined;
     Utils = exports.Utils;
     RPC = exports.RPC;
   }
