@@ -19,8 +19,8 @@
       this.emit('open');
     }.bind(this), 0);
 
-    this.socket.on('msg', function (bytes) {
-      this.emit('message', bytes);
+    this.socket.on('msg', function (str) {
+      this.emit('message', unpack(str));
     }.bind(this));
   }
 
@@ -28,9 +28,16 @@
     constructor: SIOSocket,
 
     send: function(bytes){
-      this.socket.emit('msg', bytes);
+      this.socket.emit('msg', pack(bytes));
     }
+  }
 
+  function pack(bytes){
+    return Utils.bytesToString(bytes);
+  }
+
+  function unpack(string){
+    return Utils.stringToBytes(string);
   }
 
   exports.SIOSocket = SIOSocket;
