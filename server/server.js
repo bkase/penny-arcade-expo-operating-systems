@@ -64,7 +64,6 @@ var apis = null;
 
 function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
-  console.log(clientPort+1);
   var sios = socketio.listen(clientPort+1, { log: false });
 
   Utils.whoami(function(whoiam){

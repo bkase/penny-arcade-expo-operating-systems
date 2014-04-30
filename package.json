@@ -8,7 +8,8 @@
     "pg": "^3.0.3",
     "sql": "^0.38.0",
     "ws": "~0.4.31",
-    "express": "^4.1.1"
+    "express": "^4.1.1",
+    "socket.io": "^0.9.16"
   },
   "devDependencies": {},
   "scripts": {
