@@ -155,9 +155,9 @@
     },
     deactivate: function(){
       var apiIds = Array.prototype.slice.call(arguments, 0);
-      var done = apiSpecs.pop();
+      var done = apiIds.pop();
       apiIds.forEach(function(api){
-        delete this.fnTable[Utils.stringifyAPIIdentifier(api.apiIdentifier)];
+        delete this.fnTable[Utils.stringifyAPIIdentifier(api)];
       }.bind(this));
 
       this.rpc.call('deactivate', {

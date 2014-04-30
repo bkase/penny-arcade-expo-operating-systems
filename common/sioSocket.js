@@ -11,6 +11,7 @@
     this.socket = socket;
 
     this.socket.on('disconnect', function () {
+      console.log('close');
       this.emit('close');
     }.bind(this));
 

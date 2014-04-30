@@ -65,6 +65,8 @@ var apis = null;
 function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
   var sios = socketio.listen(clientPort+1, { log: false });
+  //sios.set('close timeout', 10);
+  //sios.set('heartbeat interval', 5);
 
   Utils.whoami(function(whoiam){
     var conString = 'postgres://' + whoiam + '@localhost/cloasis' + paxos.uid;
@@ -97,6 +99,7 @@ function initClientRPC(paxos){
       conn.id = nextConnId++;
       conn.arst = true;
       var rpc = new RPC(conn, true);
+      rpc.TIMEOUT = 1000000000;
       rpc.on('close', close);
 
       rpc.on('registerUser', registerUser);
@@ -132,7 +135,6 @@ function registerUser(rpc, data, done){
 }
 
 function loginUser(rpc, data, done){
-  console.log(data.username, data.password);
   db.validateUser(data.username, data.password, function(err, valid){
     if (err)
       done({ err: err });

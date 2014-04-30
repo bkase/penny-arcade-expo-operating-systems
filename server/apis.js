@@ -114,14 +114,15 @@ APIs.prototype = {
 
   deactivate: function(rpc, data, done) {
     //TODO check user logged in + api owned by user
-    var err = { errs: {} };
+    var gerr = { errs: {} };
     var wasErr = false;
     var countDeactivates = Utils.count(Utils.size(data.apiIdentifiers), next.bind(this));
+    console.log('startDeactivate');
     data.apiIdentifiers.forEach(function(apiIdentifier, i){
       var apiStr = Utils.stringifyAPIIdentifier(apiIdentifier);
       this._deactivateAPI(apiIdentifier, function(err){
         if (err){
-          err.errs[i] = 'api not active';
+          gerr.errs[i] = 'api not active';
           wasErr = true;
         } else {
           delete this.localActiveAPIsByConnId[rpc.conn.id];
@@ -130,10 +131,10 @@ APIs.prototype = {
         countDeactivates.sub();
       }.bind(this));
     }.bind(this));
-
+    console.log('doneDeactivate');
     function next(){
       if (wasErr)
-        done({ err: err });
+        done({ err: gerr });
       else
         done({ err: null });
     }
