@@ -196,7 +196,6 @@ Paxos.prototype = {
       return;
     }
     this.paxosInProgress = true;
-    //console.log(this.uid, this.expBackoff);
     setTimeout(function(){
       request.isValid(function(valid){
         if (valid){
@@ -215,10 +214,11 @@ Paxos.prototype = {
           this._doPaxos(request, N, I, function(err){
             if (err){
               this._debug(err);
-              if (request.retry)
+              if (request.retry){
                 this.requestQueue.unshift(request);
-              this._debug('retry', request);
-              this.expBackoff *= 2 + -.5 + rng.nextFloat();
+                this.expBackoff *= 2 + -.5 + rng.nextFloat();
+                this._debug('retry', request);
+              }
             } else {
               this.expBackoff = 5;
             }
