@@ -14,7 +14,7 @@ if (require.main === module){
     var port = startPort + uid;
     portsByUID[uid] = port;
     hostportByUID[uid] = 'ws://localhost:' + port;
-    clientPortByUID[uid] = startClientPort + uid;
+    clientPortByUID[uid] = startClientPort + uid*2;
   }
 
   var processByUID = {};

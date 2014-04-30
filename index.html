@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 
-<script src="common/utils.js"></script>
-<script src="common/connection.js"></script>
-<script src="common/rpc.js"></script>
-<script src="client/cloasis.js"></script>
+<script src="cloasisLib.js"></script>
 <script>
 
-Cloasis.hostport = 'ws://localhost:32201';
+Cloasis.hostport = ['localhost', 32200];
 Cloasis.loginUser('evan', 'arst', function(err, session){
+  console.log('lu');
   if (err)
     throw err;
 

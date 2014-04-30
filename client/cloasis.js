@@ -8,6 +8,7 @@
   } else {
     Connection = exports.Connection;
     WebSocket = exports.WebSocket;
+    WebSocket = undefined;
     Utils = exports.Utils;
     RPC = exports.RPC;
   }
@@ -16,10 +17,19 @@
   //  Cloasis
   //======================
 
+  function initConn(hostport){
+    if (typeof WebSocket === 'undefined' || WebSocket == null){
+      return conn = new Connection(new SIOSocket(io.connect('http://' + hostport[0] + ':' + (hostport[1]+1))));
+      console.log("!");
+    } else {
+      return conn = new Connection(new WebSocket('ws://' + hostport[0] + ':' + hostport[1]));
+    }
+  }
+
   var Cloasis = {
-    hostport: 'ws://localhost:32200',
+    hostport: ['localhost',32200],
     loginUser: function(username, password, done, hostport){
-      var conn = new Connection(new WebSocket(Cloasis.hostport));
+      var conn = initConn(Cloasis.hostport);
       var session = null;
       conn.on('open', function() {
         session = new Session(conn);
@@ -34,7 +44,7 @@
     },
 
     registerUser: function(username, password, done, hostport){
-      var conn = new Connection(new WebSocket(Cloasis.hostport));
+      var conn = initConn(Cloasis.hostport);
       var session = null;
       conn.on('open', function() {
         session = new Session(conn);

@@ -1,11 +1,13 @@
 var Connection = require('../common/connection').Connection;
+var SIOSocket = require('../common/sioSocket').SIOSocket;
 var RPC = require('../common/rpc').RPC;
 var DB = require('./db').DB;
 var Utils = require('../common/utils').Utils;
 var ServerPaxos = require('./serverPaxos');
 var APIs = require('./apis').APIs;
-
 var WebSocketServer = require('ws').Server;
+var socketio = require('socket.io');
+
 var paxosUID = Number(process.argv[2]);
 var paxosPortByUID = JSON.parse(process.argv[3]);
 var paxosHostportByUID = JSON.parse(process.argv[4]);
@@ -62,6 +64,9 @@ var apis = null;
 
 function initClientRPC(paxos){
   var wss = new WebSocketServer({port: clientPort});
+  console.log(clientPort+1);
+  var sios = socketio.listen(clientPort+1, { log: false });
+
   Utils.whoami(function(whoiam){
     var conString = 'postgres://' + whoiam + '@localhost/cloasis' + paxos.uid;
     db = new DB(conString, paxosUID);
@@ -80,10 +85,18 @@ function initClientRPC(paxos){
       V.name = 'db::' + V.name;
       paxos.request(V, isValid);
     });
+  
+    sios.sockets.on('connection', function (socket){
+      connectConn(new Connection(new SIOSocket(socket)));
+    });
 
     wss.on('connection', function(ws) {
-      var conn = new Connection(ws);
+      connectConn(new Connection(ws));
+    });
+
+    function connectConn(conn){
       conn.id = nextConnId++;
+      conn.arst = true;
       var rpc = new RPC(conn, true);
       rpc.on('close', close);
 
@@ -96,7 +109,7 @@ function initClientRPC(paxos){
       rpc.on('call', apis.call.bind(apis));
       rpc.on('activate', apis.activate.bind(apis));
       rpc.on('deactivate', apis.deactivate.bind(apis));
-    });
+    }
   });
 }
 
@@ -120,6 +133,7 @@ function registerUser(rpc, data, done){
 }
 
 function loginUser(rpc, data, done){
+  console.log(data.username, data.password);
   db.validateUser(data.username, data.password, function(err, valid){
     if (err)
       done({ err: err });
