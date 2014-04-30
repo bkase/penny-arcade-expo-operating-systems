@@ -19,7 +19,6 @@
   function initConn(hostport){
     if (typeof WebSocket === 'undefined' || WebSocket == null){
       return conn = new Connection(new SIOSocket(io.connect('http://' + hostport[0] + ':' + (hostport[1]+1))));
-      console.log("!");
     } else {
       return conn = new Connection(new WebSocket('ws://' + hostport[0] + ':' + hostport[1]));
     }

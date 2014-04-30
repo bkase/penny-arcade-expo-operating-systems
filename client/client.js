@@ -66,7 +66,6 @@ function onLogin(session) {
     session.activate({ fn: isPrime, apiIdentifier: apiId1 }, function(err){
       if (err){
         console.log(err);
-        throw err;
       }
       session.search("Prime", function(err, output){
         if (err)
