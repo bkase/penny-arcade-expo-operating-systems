@@ -89,7 +89,6 @@ DB.prototype = {
         console.log("error creating user");
         this.cb.lazyCallCallback(V)("error creating user, even though it doesn't exist");
       }
-      console.log("successfully created user");
       this.cb.lazyCallCallback(V)(null, false);
     }.bind(this));
   },

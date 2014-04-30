@@ -1,4 +1,4 @@
 #!/bin/bash
 
-node-sql-generate --dsn "postgres://"$(whoami)"@localhost/cloasis" --schema "public" > server/schema.js
+node-sql-generate --dsn "postgres://"$(whoami)"@localhost/cloasis0" --schema "public" > server/schema.js
 

@@ -133,23 +133,29 @@ Paxos.prototype = {
   },
 
   _request: function(v, isValid, Iopt, retryOpt, isHiPri){
-    var request = {
-      value: v,
-      I: Iopt,
-      retry: (retryOpt == null) ? true : false,
-      isValid: isValid,
-    };
-    if (isHiPri){
-      this.requestQueue.unshift(request);
-      this._debug('hipri enqueue request', request);
-    } else {
-      this.requestQueue.push(request);
-      this._debug('lowpri enqueue request', request);
-    }
+    process.nextTick(function(){
+      isValid(function(valid){
+        if (!valid)
+          return;
+        var request = {
+          value: v,
+          I: Iopt,
+          retry: (retryOpt == null) ? true : false,
+          isValid: isValid,
+        };
+        if (isHiPri){
+          this.requestQueue.unshift(request);
+          this._debug('hipri enqueue request', request);
+        } else {
+          this.requestQueue.push(request);
+          this._debug('lowpri enqueue request', request);
+        }
 
-    if (!this.paxosInProgress){
-      this._processQueue();
-    }
+        if (!this.paxosInProgress){
+          this._processQueue();
+        }
+      }.bind(this), v);
+    }.bind(this));
   },
 
   _doPaxos: function(request, N, I, done){

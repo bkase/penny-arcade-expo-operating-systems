@@ -8,6 +8,7 @@ fs.readFile('./cloasisLib.js', function(err, file){
   var lib = file.toString();
  
   server.get('/cloasisLib.js', function(request, response){
+    response.setHeader('content-type', 'text/javascript');
     response.send(lib);
   });
  
