@@ -85,7 +85,6 @@ DB.prototype = {
     var query = schema.users.insert({'username':username, 'passhash':passhash}).toQuery();
     this._insertQuery(query, function(err) {
       if (err) {
-        // TODO: Try again, and then die hard if fails 
         console.log("error creating user");
         this.cb.lazyCallCallback(V)("error creating user, even though it doesn't exist");
       }
@@ -171,7 +170,6 @@ DB.prototype = {
 
   _doRegisterAPI: function(V, apiSpec) {
     pg.connect(this.conString, function(err, client, freeClient) {
-      // TODO: make sure no DUPEs in specs
       if (err) {
         console.log("ERROR: didn't register the API successfully");
         return;
@@ -231,7 +229,6 @@ DB.prototype = {
     this.cb.addCallback(V, done);
     this.emit('request', V, 
               function isValid(isValidDone, v) { 
-                // TODO: do this in one query
                 if (apiSpec.namespace.indexOf(apiSpec.username) != 0) {
                   return this.cb.lazyCallCallback(V)({ err: "namespace must start with username" });
                 }
@@ -296,7 +293,6 @@ DB.prototype = {
 
   infoAPIs: function(apiIds, done){
     pg.connect(this.conString, function(err, client, freeClient) {
-      // TODO: make sure no DUPEs in specs
       if (err) {
         done(err);
         return;

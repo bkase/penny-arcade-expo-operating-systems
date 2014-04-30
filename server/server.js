@@ -146,7 +146,6 @@ function loginUser(rpc, data, done){
 }
 
 function search(rpc, data, done){
-  //TODO check user logged in
   db.searchAPIs(data.query, function(err, apis){
     if (err)
       done({ err: err });
@@ -156,7 +155,6 @@ function search(rpc, data, done){
 }
 
 function info(rpc, data, done){
-  //TODO check user logged in
   db.infoAPIs(data.apiIdentifiers, function(err, apis){
     if (err)
       done({ err: err });
@@ -166,7 +164,6 @@ function info(rpc, data, done){
 }
 
 function register(rpc, data, done){
-  //TODO ensure namespace has username + user logged in
   db.registerAPIs(data.apiSpecs, function(err){
     if (err)
       done({ err: err });

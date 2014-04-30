@@ -24,6 +24,14 @@ if (require.main === module){
   }
 }
 
+process.on('SIGINT', function(){
+  for (var uid in processByUID){
+    var proc = processByUID[uid];
+    proc.kill('SIGINT');
+  }
+  process.exit(0);
+});
+
 function startServer(uid, portsByUID, hostportByUID, clientPortByUID, isRevive){
   var reviveArg = 0;
   if (isRevive)

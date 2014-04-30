@@ -61,7 +61,6 @@ APIs.prototype = {
   },
 
   call: function(rpc, data, done){
-    //TODO check user logged in
     var apiStr = Utils.stringifyAPIIdentifier(data.apiIdentifier);
     if (!(apiStr in this.activeAPIs)){
       done({ err: 'api not active' });
@@ -85,7 +84,6 @@ APIs.prototype = {
   },
 
   activate: function(rpc, data, done){
-    //TODO check user logged in + api registered + owned by user
     var gerr = { errs: {} };
     var wasErr = false;
     var countActivates = Utils.count(Utils.size(data.apiIdentifiers), next.bind(this));
@@ -113,7 +111,6 @@ APIs.prototype = {
   },
 
   deactivate: function(rpc, data, done) {
-    //TODO check user logged in + api owned by user
     var gerr = { errs: {} };
     var wasErr = false;
     var countDeactivates = Utils.count(Utils.size(data.apiIdentifiers), next.bind(this));
